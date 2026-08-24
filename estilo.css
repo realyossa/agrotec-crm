@@ -239,3 +239,8 @@ ul.legenda{padding:0;margin:14px 0 0}
   .coluna{scroll-snap-align:start}
   .grafico{height:220px}
 }
+
+/* período personalizado */
+[data-tema="noite"] input[type=date]{color-scheme:dark}
+[data-tema="campo"] input[type=date]{color-scheme:light}
+#periodo button{white-space:nowrap}
