@@ -38,10 +38,12 @@ export function linha(cv, s) {
     g.beginPath(); suave(s.anterior.map((v, i) => [x(i), y(v)])); g.strokeStyle = cor('--linha-anterior'); g.setLineDash([4, 4]); g.lineWidth = 1.5; g.stroke(); g.setLineDash([]);
   }
   const pts = s.atual.map((v, i) => [x(i), y(v)]);
-  g.beginPath(); suave(pts); g.lineTo(pts[n - 1][0], padT + h); g.lineTo(pts[0][0], padT + h); g.closePath();
-  const grad = g.createLinearGradient(0, padT, 0, padT + h); grad.addColorStop(0, cor('--area-grafico')); grad.addColorStop(1, 'rgba(0,0,0,0)');
-  g.fillStyle = grad; g.fill();
-  g.beginPath(); suave(pts); g.strokeStyle = cor('--linha-grafico'); g.lineWidth = 2.4; g.lineJoin = 'round'; g.stroke();
+  if (n > 1) {
+    g.beginPath(); suave(pts); g.lineTo(pts[n - 1][0], padT + h); g.lineTo(pts[0][0], padT + h); g.closePath();
+    const grad = g.createLinearGradient(0, padT, 0, padT + h); grad.addColorStop(0, cor('--area-grafico')); grad.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grad; g.fill();
+    g.beginPath(); suave(pts); g.strokeStyle = cor('--linha-grafico'); g.lineWidth = 2.4; g.lineJoin = 'round'; g.stroke();
+  }
   if (s.destaque && s.destaque.length === n) { // pontos de IA, menores, em dourado/verde
     g.fillStyle = cor('--verde');
     s.destaque.forEach((v, i) => { if (v > 0) { g.beginPath(); g.arc(x(i), y(v), 2.6, 0, Math.PI * 2); g.fill(); } });

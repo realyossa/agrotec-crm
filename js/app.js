@@ -8,7 +8,7 @@ const app = document.getElementById('app');
 // armazenamento pode não existir (sandbox, modo privado): nunca derruba o app
 const guardar = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
 const lerGuardado = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
-const estado = { perfil: null, config: null, registro: null, recorte: 'todos', tema: lerGuardado('tema') || C.temaPadrao || 'noite' };
+const estado = { perfil: null, config: null, registro: null, recorte: 'todos', tema: lerGuardado('tema') || C.temaPadrao || 'noite', periodo: lerGuardado('periodo') || '14', periodoDe: lerGuardado('periodoDe') || '', periodoAte: lerGuardado('periodoAte') || '' };
 document.documentElement.setAttribute('data-tema', estado.tema);
 
 /* ------------------------------------------------------------ utilidades */
@@ -109,6 +109,53 @@ function recorteHtml() { return `<div class="seg" id="recorte">${[['todos', 'Tod
 function ligarRecorte() { const s = document.getElementById('recorte'); if (s) s.querySelectorAll('button').forEach(b => b.onclick = () => { estado.recorte = b.dataset.r; render(); }); }
 const noRecorte = (n) => estado.recorte === 'todos' || n.funil === estado.recorte;
 
+/* período da Visão geral — presets + faixa personalizada (padrão GA4/Stripe) */
+const isoDia = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const diaCurto = (s) => s ? s.slice(8, 10) + '/' + s.slice(5, 7) : '';
+function janelaPeriodo() {
+  const hoje = new Date(); hoje.setHours(12, 0, 0, 0);
+  let de, ate = new Date(hoje), rotulo;
+  if (estado.periodo === 'p' && estado.periodoDe && estado.periodoAte) {
+    de = new Date(estado.periodoDe + 'T12:00:00'); ate = new Date(estado.periodoAte + 'T12:00:00');
+    rotulo = diaCurto(estado.periodoDe) + ' – ' + diaCurto(estado.periodoAte);
+  } else {
+    const n = Number(estado.periodo) || 14; de = new Date(hoje); de.setDate(de.getDate() - (n - 1));
+    rotulo = n === 1 ? 'hoje' : n + ' dias';
+  }
+  const dias = Math.max(1, Math.round((ate - de) / 864e5) + 1);
+  const deAnt = new Date(de); deAnt.setDate(deAnt.getDate() - dias);
+  const ateAnt = new Date(de); ateAnt.setDate(ateAnt.getDate() - 1);
+  return { deISO: isoDia(de), ateISO: isoDia(ate), deAntISO: isoDia(deAnt), ateAntISO: isoDia(ateAnt), dias, rotulo };
+}
+function periodoHtml() {
+  const j = janelaPeriodo();
+  const b = (k, t) => `<button data-p="${k}" class="${estado.periodo === k ? 'ativo' : ''}">${t}</button>`;
+  return `<div class="seg" id="periodo">${b('1', 'Hoje')}${b('7', '7 dias')}${b('14', '14 dias')}${b('30', '30 dias')}${b('p', estado.periodo === 'p' ? j.rotulo : 'Personalizado')}</div>`;
+}
+function ligarPeriodo() {
+  const s = document.getElementById('periodo'); if (!s) return;
+  s.querySelectorAll('button').forEach(b => b.onclick = () => {
+    if (b.dataset.p === 'p') return modalPeriodo();
+    estado.periodo = b.dataset.p; guardar('periodo', estado.periodo); render();
+  });
+}
+function modalPeriodo() {
+  const j = janelaPeriodo();
+  const min = new Date(); min.setDate(min.getDate() - 59); // a série diária guarda 60 dias
+  const f = modal(`<h2>Período personalizado</h2><form id="fper">
+    <div class="campo"><label for="p-de">De</label><input id="p-de" type="date" name="de" required value="${estado.periodoDe || j.deISO}" min="${isoDia(min)}" max="${isoDia(new Date())}"></div>
+    <div class="campo"><label for="p-ate">Até</label><input id="p-ate" type="date" name="ate" required value="${estado.periodoAte || j.ateISO}" min="${isoDia(min)}" max="${isoDia(new Date())}"></div>
+    <div class="dica">O gráfico diário cobre os últimos 60 dias. A comparação usa o período anterior de mesmo tamanho.</div>
+    <div class="rodape"><button class="btn" type="button" data-fechar>Cancelar</button><button class="btn btn-ouro" type="submit">Aplicar</button></div></form>`);
+  f.querySelector('[data-fechar]').onclick = () => f.remove();
+  f.querySelector('form').onsubmit = (e) => { e.preventDefault(); const d = new FormData(e.target);
+    let de = d.get('de'), ate = d.get('ate'); if (de > ate) { const t = de; de = ate; ate = t; }
+    estado.periodo = 'p'; estado.periodoDe = de; estado.periodoAte = ate;
+    guardar('periodo', 'p'); guardar('periodoDe', de); guardar('periodoAte', ate); f.remove(); render(); };
+}
+const noPeriodo = (j) => (x) => { const d = String(x || '').slice(0, 10); return d >= j.deISO && d <= j.ateISO; };
+const noPeriodoAnt = (j) => (x) => { const d = String(x || '').slice(0, 10); return d >= j.deAntISO && d <= j.ateAntISO; };
+
 /* ---------------------------------------------------------------- login */
 function telaLogin(erro = '') {
   app.innerHTML = `<div class="login"><form class="cx" id="flogin" autocomplete="on">
@@ -128,38 +175,46 @@ function telaLogin(erro = '') {
 
 /* ---------------------------------------------------------- visão geral */
 async function telaVisao() {
-  const [k, serie, motores, fila, pessoas] = await Promise.all([dados.kpis(), dados.serie(28), dados.motores(), dados.fila(), dados.pessoas()]);
+  const j = janelaPeriodo();
+  const [k, serie, motores, fila, pessoas] = await Promise.all([dados.kpis(), dados.serie(60), dados.motores(), dados.fila(), dados.pessoas()]);
   const filaR = fila.filter(noRecorte);
   const tend = (a, b) => { if (!b) return '<span class="tend neutro">novo</span>'; const p = Math.round((a - b) / b * 100); return `<span class="tend ${p > 0 ? 'sobe' : p < 0 ? 'desce' : 'neutro'}">${p > 0 ? '↗ +' : p < 0 ? '↘ ' : '→ '}${p}%</span>`; };
   const semContato = filaR.filter(n => n.sem_contato && !n.fechado_em).length;
   const atrasados = filaR.filter(n => n.sem_contato && !n.fechado_em && classeSla(n) !== 'ok').length;
   const recentes = filaR.slice(0, 8);
-  // origem de conversão (pessoas), com IA em dourado
-  const cont = {}; pessoas.forEach(p => { const o = p.origem_conversao || p.origem_primeira || {}; const m = o.motor || (o.tipo === 'interno' ? '(interno)' : '(direto)'); cont[m] = cont[m] || { n: 0, tipo: o.tipo }; cont[m].n++; });
+  // tudo abaixo respeita o período escolhido no topo
+  const emJanela = noPeriodo(j), emJanelaAnt = noPeriodoAnt(j);
+  const serieJ = serie.filter(x => emJanela(x.dia)), serieAnt = serie.filter(x => emJanelaAnt(x.dia));
+  const somaCliques = a => a.reduce((t, x) => t + Number(x.cliques_contato || 0) + Number(x.formularios || 0), 0);
+  const pesJ = pessoas.filter(p => emJanela(p.criado_em)), pesAnt = pessoas.filter(p => emJanelaAnt(p.criado_em));
+  const ehIa = p => ((p.origem_conversao || {}).tipo === 'ia') || ((p.origem_primeira || {}).tipo === 'ia');
+  const kJanela = { pessoas: pesJ.length, pessoasAnt: pesAnt.length, cliques: somaCliques(serieJ), cliquesAnt: somaCliques(serieAnt), ia: pesJ.filter(ehIa).length, historico: pessoas.filter(p => p.esteve_no_site).length };
+  // origem de conversão no período (pessoas), com IA em dourado
+  const cont = {}; pesJ.forEach(p => { const o = p.origem_conversao || p.origem_primeira || {}; const m = o.motor || (o.tipo === 'interno' ? '(interno)' : '(direto)'); cont[m] = cont[m] || { n: 0, tipo: o.tipo }; cont[m].n++; });
   const fatias = Object.entries(cont).sort((a, b) => b[1].n - a[1].n).slice(0, 8).map(([m, v]) => ({ rotulo: m, valor: v.n, cor: corMotor(m, v.tipo), tipo: v.tipo }));
-  moldura('visao', `${topo('Visão geral', 'O pulso dos leads do site em tempo real', recorteHtml())}
+  moldura('visao', `${topo('Visão geral', 'O pulso dos leads do site em tempo real', periodoHtml() + recorteHtml())}
     <div class="kpis">
-      <div class="kpi"><div class="cab">${ICO.pessoas}${tend(k.pessoas_14d, k.pessoas_14d_anterior)}</div><b class="num">${k.pessoas_14d ?? 0}</b><span>pessoas · 14 dias</span></div>
-      <div class="kpi"><div class="cab">${ICO.wa}${tend(k.cliques_14d, k.cliques_14d_anterior)}</div><b class="num">${k.cliques_14d ?? 0}</b><span>cliques de contato · 14 dias</span></div>
-      <div class="kpi"><div class="cab">${ICO.ia}<span class="tend neutro">canal IA</span></div><b class="num ouro">${k.pessoas_ia_14d ?? 0}</b><span>vieram de uma IA</span></div>
+      <div class="kpi"><div class="cab">${ICO.pessoas}${tend(kJanela.pessoas, kJanela.pessoasAnt)}</div><b class="num">${kJanela.pessoas}</b><span>pessoas · ${h(j.rotulo)}</span></div>
+      <div class="kpi"><div class="cab">${ICO.wa}${tend(kJanela.cliques, kJanela.cliquesAnt)}</div><b class="num">${kJanela.cliques}</b><span>cliques de contato · ${h(j.rotulo)}</span></div>
+      <div class="kpi"><div class="cab">${ICO.ia}<span class="tend neutro">canal IA</span></div><b class="num ouro">${kJanela.ia}</b><span>vieram de uma IA · ${h(j.rotulo)}</span></div>
       <div class="kpi"><div class="cab">${ICO.fila}<span class="tend ${atrasados ? 'desce' : 'neutro'}">${atrasados ? atrasados + ' fora do prazo' : 'no prazo'}</span></div><b class="num ${atrasados ? 'vermelho' : 'azul'}">${semContato}</b><span>sem atendimento</span></div>
       <div class="kpi"><div class="cab">${ICO.check}<span class="tend neutro">mediana 30 d</span></div><b class="num verde">${k.mediana_min_contato != null ? duracao(k.mediana_min_contato) : '—'}</b><span>até o primeiro contato</span></div>
-      <div class="kpi"><div class="cab">${ICO.site}<span class="tend neutro">histórico</span></div><b class="num">${k.com_historico ?? 0}</b><span>leads que estavam no site</span></div>
+      <div class="kpi"><div class="cab">${ICO.site}<span class="tend neutro">histórico</span></div><b class="num">${kJanela.historico}</b><span>leads que estavam no site</span></div>
     </div>
     <div class="grade-2">
-      <div class="cx"><h2>Cliques em botões de contato</h2><div class="sub">Últimos 14 dias · WhatsApp, telefone, formulários e portões · tracejado = 14 dias anteriores · ponto verde = vindos de IA</div>
+      <div class="cx"><h2>Cliques em botões de contato</h2><div class="sub">${j.rotulo === 'hoje' ? 'Hoje' : (j.rotulo.includes('–') ? j.rotulo : 'Últimos ' + j.rotulo)} · WhatsApp, telefone, formulários e portões · tracejado = período anterior · ponto verde = vindos de IA</div>
         <div style="position:relative;margin-top:14px"><canvas class="grafico" id="g-linha"></canvas><div class="tt chip c-neutro" hidden style="position:absolute;transform:translateX(-50%);pointer-events:none"></div></div></div>
       <div class="cx"><h2>De onde vieram</h2><div class="sub">Origem na conversão · dourado = IA</div>
         <canvas id="g-donut" style="width:150px;height:150px;display:block;margin:14px auto 0"></canvas>
-        <ul class="legenda">${fatias.map(f => `<li class="${f.tipo === 'ia' ? 'ia' : ''}"><i style="background:${f.cor}"></i><span>${h(f.rotulo)}</span><b class="num">${f.valor}</b></li>`).join('') || '<li class="vazio">Nenhuma pessoa ainda.</li>'}</ul></div>
+        <ul class="legenda">${fatias.map(f => `<li class="${f.tipo === 'ia' ? 'ia' : ''}"><i style="background:${f.cor}"></i><span>${h(f.rotulo)}</span><b class="num">${f.valor}</b></li>`).join('') || '<li class="vazio">Nenhuma pessoa neste período.</li>'}</ul></div>
     </div>
     <div class="cx"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2>Leads recentes</h2><span class="sub">${filaR.length} neste recorte · <a href="#/pessoas" style="color:var(--ouro)">ver todos</a></span></div>
       <div class="rolo"><table class="tabela" style="margin-top:8px"><thead><tr><th>Código</th><th>Pessoa</th><th>Origem</th><th>Funil</th><th>Status</th><th></th></tr></thead><tbody>
       ${recentes.map(n => `<tr><td class="codigo">${h(n.codigo || '')}</td><td class="pessoa"><b>${h(nomeOk(n.pessoa_nome))}</b><small>${h(n.telefone_fmt || '')} ${n.esteve_no_site ? '· esteve no site' : ''}</small></td><td>${chipOrigem(n.origem_conversao)}</td><td>${chipFunil(n.funil)}</td><td>${chipEtapa(n.etapa)}</td><td><a class="btn btn-p" href="#/pessoa/${n.pessoa_id}">${ICO.seta}</a></td></tr>`).join('') || '<tr><td colspan="6" class="vazio">Nenhum lead ainda. Assim que alguém clicar num botão do site, aparece aqui.</td></tr>'}
       </tbody></table></div></div>`, { semContato });
-  ligarTopo(); ligarRecorte();
-  const ult = serie.slice(-14), ant = serie.slice(-28, -14);
-  const desenha = () => { if (!document.getElementById('g-linha')) { window.onresize = null; return; } linha(document.getElementById('g-linha'), { rotulos: ult.map(x => fmtDia(x.dia)), atual: ult.map(x => Number(x.cliques_contato) + Number(x.formularios || 0)), anterior: ant.length === 14 ? ant.map(x => Number(x.cliques_contato) + Number(x.formularios || 0)) : null, destaque: ult.map(x => Number(x.cliques_ia || 0)) }); donut(document.getElementById('g-donut'), fatias); };
+  ligarTopo(); ligarRecorte(); ligarPeriodo();
+  const ult = serieJ, ant = serieAnt;
+  const desenha = () => { if (!document.getElementById('g-linha')) { window.onresize = null; return; } linha(document.getElementById('g-linha'), { rotulos: ult.map(x => fmtDia(x.dia)), atual: ult.map(x => Number(x.cliques_contato) + Number(x.formularios || 0)), anterior: ant.length === ult.length ? ant.map(x => Number(x.cliques_contato) + Number(x.formularios || 0)) : null, destaque: ult.map(x => Number(x.cliques_ia || 0)) }); donut(document.getElementById('g-donut'), fatias); };
   desenha(); window.onresize = desenha;
 }
 
