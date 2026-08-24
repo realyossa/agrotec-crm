@@ -1,0 +1,2 @@
+{ "name": "Agrotec · Console de Leads", "short_name": "Agrotec Leads", "start_url": "/#/fila", "display": "standalone", "background_color": "#0B140E", "theme_color": "#0B140E", "lang": "pt-BR",
+  "icons": [ { "src": "/icone.svg", "sizes": "any", "type": "image/svg+xml" }, { "src": "/icone-180.png", "sizes": "180x180", "type": "image/png" }, { "src": "/icone-512.png", "sizes": "512x512", "type": "image/png" } ] }
