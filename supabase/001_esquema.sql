@@ -321,10 +321,10 @@ create policy editar on public.perfis for update to authenticated using (public.
 create or replace view public.v_serie_diaria with (security_invoker = true) as
 select d::date as dia,
   count(e.id) filter (where e.nome ~ '^(cta|rodape|menu|flutuante|card|tel|mail|mapa):.*_click$') as cliques_contato,
-  count(e.id) filter (where e.nome ~ '^(form|portao|popup):.*_submit$') as formularios,
+  count(e.id) filter (where e.nome ~ '^(form|portao|popup):.*submit$') as formularios,
   count(e.id) filter (where e.nome = 'pagina:view') as visualizacoes,
   count(distinct e.visitante_id) filter (where e.nome = 'pagina:view') as visitantes,
-  count(e.id) filter (where e.origem_tipo = 'ia' and e.nome ~ '_click$|_submit$') as cliques_ia
+  count(e.id) filter (where e.origem_tipo = 'ia' and e.nome ~ '_click$|submit$') as cliques_ia
 from generate_series(now()::date - interval '59 days', now()::date, interval '1 day') d
 left join public.eventos e on e.ts::date = d::date
 group by d order by d;
@@ -362,7 +362,7 @@ from public.eventos group by nome;
 create or replace view public.v_motores with (security_invoker = true) as
 select coalesce(origem_motor,'(direto)') as motor, origem_tipo,
        count(distinct visitante_id) filter (where nome='pagina:view') as visitantes_30d,
-       count(*) filter (where nome ~ '_click$|_submit$') as cliques_30d,
+       count(*) filter (where nome ~ '_click$|submit$') as cliques_30d,
        count(distinct pessoa_id) filter (where pessoa_id is not null) as pessoas_30d
 from public.eventos where ts > now() - interval '30 days'
 group by 1,2 order by visitantes_30d desc;
