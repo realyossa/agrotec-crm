@@ -227,14 +227,17 @@ async function telaVisao() {
 }
 
 /* ------------------------------------------------------------------ fila */
-async function telaFila(aba = 'precisa') {
+/* Pedido do dono (31/08/2026): "Todos" e a primeira aba do Atendimento e a
+   que abre por padrao — quem chega quer o retrato inteiro, e so depois filtra
+   quem precisa de resposta. */
+async function telaFila(aba = 'todos') {
   const fila = (await dados.fila()).filter(noRecorte);
   const fins = estado.config?.etapas_finais || { ganhou: [], perdeu: [] };
   const aberto = n => !fins.ganhou.includes(n.etapa) && !fins.perdeu.includes(n.etapa);
   const faixas = { precisa: fila.filter(n => aberto(n) && n.sem_contato), conversa: fila.filter(n => aberto(n) && !n.sem_contato), encerrados: fila.filter(n => !aberto(n)), todos: fila };
   const lista = faixas[aba].slice().sort((a, b) => { if (aba === 'precisa') return new Date(a.criado_em) - new Date(b.criado_em); return new Date(b.ultima_atividade_em || b.criado_em) - new Date(a.ultima_atividade_em || a.criado_em); });
   moldura('fila', `${topo('Atendimento', 'Com quem falar agora — ordem por tempo esperando', recorteHtml())}
-    <div class="filtros">${[['precisa', 'Precisa de você'], ['conversa', 'Em conversa'], ['encerrados', 'Encerrados'], ['todos', 'Todos']].map(([k, t]) => `<button class="aba ${aba === k ? 'ativo' : ''}" data-aba="${k}">${t}<small>${faixas[k].length}</small></button>`).join('')}</div>
+    <div class="filtros">${[['todos', 'Todos'], ['precisa', 'Precisa de você'], ['conversa', 'Em conversa'], ['encerrados', 'Encerrados']].map(([k, t]) => `<button class="aba ${aba === k ? 'ativo' : ''}" data-aba="${k}">${t}<small>${faixas[k].length}</small></button>`).join('')}</div>
     <div class="fila">${lista.map(n => cartaoFila(n)).join('') || '<div class="cx vazio">Nada aqui. Bom sinal.</div>'}</div>`, { semContato: faixas.precisa.length });
   ligarTopo(); ligarRecorte();
   document.querySelectorAll('.aba').forEach(b => b.onclick = () => telaFila(b.dataset.aba));
