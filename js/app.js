@@ -21,6 +21,14 @@ const iniciais = (n) => (n || '?').split(' ').filter(Boolean).slice(0, 2).map(x 
 const nomeOk = (n) => n && !/^\(n[ãa]o inform/.test(n) ? n : '(não informou)';
 const semNome = (n) => !n || /^\(n[ãa]o inform/.test(n);
 const tel = (t) => t ? String(t).replace(/\D/g, '') : '';
+/* Telefone com pedido de conferência (31/08/2026): o site aceita o número
+   como a pessoa digitou; quando o formato não fecha, o servidor marca
+   telefone_conferir + motivo, e as variações determinísticas (o 9 de 2016)
+   chegam em telefone_alternativas — para TENTAR, nunca para substituir sem
+   alguém confirmar no botão "era este". */
+const fmtTel = (s) => { s = tel(s); return s.length === 13 ? `(${s.slice(2, 4)}) ${s.slice(4, 9)}-${s.slice(9)}` : s.length === 12 ? `(${s.slice(2, 4)}) ${s.slice(4, 8)}-${s.slice(8)}` : s; };
+const chipConferir = (x) => x?.telefone_conferir ? `<span class="chip c-laranja" title="${h(x.telefone_motivo || 'formato fora do padrão — confirmar com a pessoa')}">conferir</span>` : '';
+const altsDe = (x) => Array.isArray(x?.telefone_alternativas) ? x.telefone_alternativas.filter(a => a && a.numero) : [];
 const waLink = (t, nome) => 'https://wa.me/' + tel(t) + '?text=' + encodeURIComponent('Olá' + (nome && !semNome(nome) ? ', ' + nome.split(' ')[0] : '') + '! Aqui é da Agrotec Imobiliária. Vi seu contato pelo site e queria entender o que você procura.');
 const ICO = {
   visao: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
@@ -238,7 +246,7 @@ function cartaoFila(n) {
     <div class="relogio ${cls}"><b class="num">${duracao(esperando)}</b><small>${n.sem_contato ? 'esperando' : 'até o 1º contato'}</small></div>
     <div><div class="nome">${h(nomeOk(n.pessoa_nome))} <span class="codigo mono" style="color:var(--ouro)">${h(n.codigo || '')}</span> ${n.esteve_no_site ? `<span class="chip c-azul" title="Tem histórico de navegação antes de se identificar">${ICO.site} esteve no site</span>` : ''}</div>
       <div class="linha">${chipFunil(n.funil)} ${n.tipo ? `<span class="chip c-neutro">${h(n.tipo)}</span>` : ''} ${chipOrigem(n.origem_conversao)} ${n.pessoa_cidade ? `<span>${h(n.pessoa_cidade)}</span>` : n.cidade_ip ? `<span title="pelo IP, aproximado">~${h(n.cidade_ip)}</span>` : ''} <span>· ${h(n.origem_rotulo || n.origem_evento || '')} em ${h(n.origem_pagina || '')}</span> ${n.corretor_nome ? `<span>· ${h(n.corretor_nome.split(' ')[0])}</span>` : ''} ${chipEtapa(n.etapa)}</div></div>
-    <div class="botoes">${n.telefone ? `<a class="btn btn-p btn-verde" target="_blank" rel="noopener" href="${waLink(n.telefone, n.pessoa_nome)}" data-acao="whatsapp">${ICO.wa} WhatsApp</a><a class="btn btn-p" href="tel:+${tel(n.telefone)}" data-acao="ligar">${ICO.tel}</a>` : '<span class="chip c-neutro">sem telefone</span>'}
+    <div class="botoes">${n.telefone ? `<a class="btn btn-p btn-verde" target="_blank" rel="noopener" href="${waLink(n.telefone, n.pessoa_nome)}" data-acao="whatsapp">${ICO.wa} WhatsApp</a><a class="btn btn-p" href="tel:+${tel(n.telefone)}" data-acao="ligar">${ICO.tel}</a>${chipConferir(n)}${altsDe(n).map(a => `<a class="btn btn-p" target="_blank" rel="noopener" href="${waLink(a.numero, n.pessoa_nome)}" title="${h(a.porque || '')} — ${h(fmtTel(a.numero))}" data-acao="whatsapp">${ICO.wa} tentar com o 9</a>`).join('')}` : '<span class="chip c-neutro">sem telefone</span>'}
       <button class="btn btn-p" data-acao="falei">Falei</button><button class="btn btn-p" data-acao="briefing" title="Copiar resumo para repassar">${ICO.copiar}</button><a class="btn btn-p" href="#/pessoa/${n.pessoa_id}">${ICO.seta}</a></div></article>`;
 }
 function ligarAcoesLead() {
@@ -362,7 +370,8 @@ async function telaPessoa(id) {
             : `<li><div class="ponto site">${it.e.nome.includes('whatsapp') || it.e.nome.includes('submit') ? ICO.wa : ICO.site}</div><div><b>${h(nomeEvento(it.e.nome))}</b><small>${h(it.e.pagina || '')}${it.e.rotulo ? ' · ' + h(it.e.rotulo) : ''}${it.e.props?.pergunta ? ' · “' + h(it.e.props.pergunta) + '”' : ''}${it.e.props?.termo ? ' · buscou “' + h(it.e.props.termo) + '”' : ''}${it.e.origem_motor ? ' · ' + h(it.e.origem_motor) : ''}${it.e.dispositivo ? ' · ' + h(it.e.dispositivo) : ''}</small><small class="quando">${fmtData(it.em)}</small></div></li>`).join('') || '<li class="vazio">Sem eventos.</li>'}</ul></div>
       </div>
       <div class="cx"><h2>Dados</h2><dl class="dados">
-        <dt>Telefone</dt><dd>${h(p.telefone_fmt || p.telefone || '—')}</dd>
+        <dt>Telefone</dt><dd>${h(p.telefone_fmt || p.telefone || '—')} ${chipConferir(p)}${p.telefone_conferir && p.telefone_motivo ? `<small style="display:block;color:var(--tinta-3)">${h(p.telefone_motivo)} — confirmar com a pessoa na conversa</small>` : ''}</dd>
+        ${altsDe(p).length ? `<dt>Se não atender</dt><dd>${altsDe(p).map(a => `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:2px 0"><a class="btn btn-p" target="_blank" rel="noopener" href="${waLink(a.numero, p.nome)}">${ICO.wa} ${h(fmtTel(a.numero))}</a><small style="color:var(--tinta-3)">${h(a.porque || '')}</small><button class="btn btn-p" data-eraeste="${h(tel(a.numero))}" title="Confirma este como o número principal da ficha">era este</button></div>`).join('')}</dd>` : ''}
         <dt>E-mail</dt><dd>${h(p.email || '—')}</dd>
         <dt>Cidade</dt><dd>${h(p.cidade || '—')}${p.cidade_ip ? ` <small style="color:var(--tinta-3)">· pelo IP: ${h(p.cidade_ip)}${p.uf_ip ? '/' + h(p.uf_ip) : ''}</small>` : ''}</dd>
         <dt>Origem da conversão</dt><dd class="chips">${chipOrigem(p.origem_conversao)}${p.origem_conversao?.referrer_host ? `<span class="chip c-borda">${h(p.origem_conversao.referrer_host)}</span>` : ''}${p.origem_conversao?.utm_campaign ? `<span class="chip c-borda">${h(p.origem_conversao.utm_campaign)}</span>` : ''}</dd>
@@ -381,6 +390,15 @@ async function telaPessoa(id) {
   const wa = document.getElementById('wa'); if (wa) wa.onclick = () => neg() && dados.atividade({ negocio_id: neg(), pessoa_id: p.id, tipo: 'whatsapp', texto: 'Abriu o WhatsApp pelo console', resultado: 'tentativa' });
   const lg = document.getElementById('ligar'); if (lg) lg.onclick = () => neg() && dados.atividade({ negocio_id: neg(), pessoa_id: p.id, tipo: 'ligacao', texto: 'Ligou pelo console', resultado: 'tentativa' });
   document.getElementById('salvar-obs').onclick = async () => { await dados.editarPessoa(p.id, { observacoes: document.getElementById('obs').value }); toast('Salvo'); };
+  document.querySelectorAll('[data-eraeste]').forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try {
+      const r = await dados.telefoneConfirmado(p.id, b.dataset.eraeste);
+      if (r && r.ok === false) { toast(r.erro || 'Não deu para confirmar'); b.disabled = false; return; }
+      toast('Número confirmado como principal');
+      telaPessoa(p.id);
+    } catch (e) { toast('Não deu para confirmar agora'); b.disabled = false; }
+  });
   document.querySelectorAll('[data-etapa]').forEach(b => b.onclick = () => modalEtapa(b.dataset.etapa, b.dataset.funil, b.dataset.atual, p.id));
   document.querySelectorAll('[data-editar]').forEach(b => b.onclick = () => modalNegocio(d.negocios.find(x => x.id === b.dataset.editar), p));
   document.getElementById('novo-negocio').onclick = () => modalNegocio(null, p);

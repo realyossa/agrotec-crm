@@ -49,6 +49,10 @@ const provSupabase = {
   async editarNegocio(id, campos) { const s = await cliente(); const { error } = await s.from('negocios').update(campos).eq('id', id); if (error) throw error; },
   async criarNegocio(campos) { const s = await cliente(); const { error } = await s.from('negocios').insert(campos); if (error) throw error; },
   async editarPessoa(id, campos) { const s = await cliente(); const { error } = await s.from('pessoas').update(campos).eq('id', id); if (error) throw error; },
+  // "era este": promove uma variação a número principal. A regra mora no
+  // banco (telefone_confirmado): só número que já está na ficha, e nunca um
+  // que outra pessoa já tenha.
+  async telefoneConfirmado(pessoaId, numero) { const s = await cliente(); const { data, error } = await s.rpc('telefone_confirmado', { p_pessoa: pessoaId, p_numero: numero }); if (error) throw error; return data; },
   async atividade(a) { const s = await cliente(); const { data: u } = await s.auth.getUser(); const { error } = await s.from('atividades').insert({ ...a, quem: u?.user?.id || null }); if (error) throw error; },
   async atualizarPerfil(id, campos) { const s = await cliente(); const { error } = await s.from('perfis').update(campos).eq('id', id); if (error) throw error; },
   async salvarConfig(chave, valor) { const s = await cliente(); const { error } = await s.from('config').upsert({ chave, valor, atualizado_em: new Date().toISOString() }); if (error) throw error; },
@@ -127,6 +131,7 @@ const provDemo = {
   async editarNegocio(id, c) { Object.assign(D.negocios.find(x => x.id === id), c); },
   async criarNegocio(c) { D.negocios.unshift({ id: 'n' + Math.random(), criado_em: new Date().toISOString(), pontuacao: 0, ...c }); },
   async editarPessoa(id, c) { Object.assign(D.pessoas.find(x => x.id === id), c); },
+  async telefoneConfirmado(id, numero) { const p = D.pessoas.find(x => x.id === id); if (p) { p.telefone = numero; p.telefone_conferir = false; p.telefone_motivo = null; p.telefone_alternativas = []; } return { ok: true }; },
   async atividade(a) { const n = D.negocios.find(x => x.id === a.negocio_id); D.atividades.push({ id: 'a' + Math.random(), em: new Date().toISOString(), perfis: D.perfis[2], quem: 'u0', ...a }); if (n && ['ligacao', 'whatsapp', 'visita', 'nota', 'repasse'].includes(a.tipo)) { n.primeiro_contato_em = n.primeiro_contato_em || new Date().toISOString(); n.ultima_atividade_em = new Date().toISOString(); } },
   async atualizarPerfil(id, c) { Object.assign(D.perfis.find(x => x.id === id), c); },
   async salvarConfig(k, v) { D.config[k] = v; },
