@@ -339,7 +339,7 @@ async function telaPessoas(q = '') {
       <div class="busca">${ICO.busca}<input id="q" placeholder="nome, telefone, código ou cidade…" value="${h(q)}"></div></div>
     <div class="cx" style="padding:0 16px"><div class="rolo"><table class="tabela"><thead><tr><th>Quando</th><th>Pessoa</th><th>Origem</th><th>Onde clicou</th><th>Negócios</th><th></th></tr></thead><tbody>
     ${lista.map(p => { const n = (p.negocios || [])[0] || {}; return `<tr><td class="quando"><b>${fmtData(p.criado_em)}</b><small>${p.visitas > 1 ? p.visitas + ' visitas' : '1ª visita'}${p.esteve_no_site ? ' · esteve no site' : ''}</small></td>
-      <td class="pessoa"><b>${h(nomeOk(p.nome))}</b><small>${h(p.telefone_fmt || p.telefone || 'sem telefone')} · <span class="codigo">${h(p.codigo || '')}</span></small></td>
+      <td class="pessoa"><b>${h(nomeOk(p.nome))}</b>${p.interna ? ' <span class="chip c-neutro">interno</span>' : ''}<small>${h(p.telefone_fmt || p.telefone || 'sem telefone')} · <span class="codigo">${h(p.codigo || '')}</span></small></td>
       <td>${chipOrigem(p.origem_conversao)}</td><td><small>${h(n.origem_rotulo || n.origem_evento || '')}<br>${h(n.origem_pagina || '')}</small></td>
       <td>${(p.negocios || []).map(x => chipFunil(x.funil) + ' ' + chipEtapa(x.etapa)).join('<br>')}</td><td><a class="btn btn-p" href="#/pessoa/${p.id}">${ICO.seta}</a></td></tr>`; }).join('') || '<tr><td colspan="6" class="vazio">Nenhuma pessoa encontrada.</td></tr>'}
     </tbody></table></div></div>`);
@@ -356,7 +356,7 @@ async function telaPessoa(id) {
   const n0 = d.negocios[0];
   const itens = [...d.atividades.map(a => ({ em: a.em, tipo: 'humano', a })), ...d.eventos.map(e => ({ em: e.ts, tipo: 'site', e }))].sort((a, b) => new Date(b.em) - new Date(a.em));
   const antes = d.eventos.filter(e => n0 && new Date(e.ts) < new Date(n0.criado_em)).length;
-  moldura('pessoas', `${topo(nomeOk(p.nome), `${p.codigo || ''} · entrou ${fmtData(p.criado_em)}${p.esteve_no_site ? ' · esteve no site antes de se identificar' : ''}`, `<a class="btn" href="#/pessoas">← Pessoas</a>`)}
+  moldura('pessoas', `${topo(nomeOk(p.nome), `${p.codigo || ''}${p.interna ? ' · PESSOA INTERNA (sem cartões, fora da fila e dos números)' : ''} · entrou ${fmtData(p.criado_em)}${p.esteve_no_site ? ' · esteve no site antes de se identificar' : ''}`, `<button class="btn" id="interna" title="${p.interna ? 'Volta a gerar cartões' : 'Sócio, corretor ou dono: sem cartões, fora da fila e dos números'}">${p.interna ? 'Deixar de ser interno' : 'Marcar como interno'}</button><a class="btn" href="#/pessoas">← Pessoas</a>`)}
     <div class="pessoa-grade">
       <div>
         <div class="cx" style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center"><h2>Negócios</h2><button class="btn btn-p" id="novo-negocio">+ Negócio</button></div>
@@ -393,6 +393,21 @@ async function telaPessoa(id) {
   const wa = document.getElementById('wa'); if (wa) wa.onclick = () => neg() && dados.atividade({ negocio_id: neg(), pessoa_id: p.id, tipo: 'whatsapp', texto: 'Abriu o WhatsApp pelo console', resultado: 'tentativa' });
   const lg = document.getElementById('ligar'); if (lg) lg.onclick = () => neg() && dados.atividade({ negocio_id: neg(), pessoa_id: p.id, tipo: 'ligacao', texto: 'Ligou pelo console', resultado: 'tentativa' });
   document.getElementById('salvar-obs').onclick = async () => { await dados.editarPessoa(p.id, { observacoes: document.getElementById('obs').value }); toast('Salvo'); };
+  /* Gente da casa (31/08/2026): sócio/corretor/dono que testa o site virava
+     lead e poluía fila e números. Marcar como interno apaga os cartões da
+     pessoa (a ficha e o histórico de site ficam) e impede cartões novos. */
+  document.getElementById('interna').onclick = () => {
+    if (p.interna) { dados.marcarInterna(p.id, false).then(() => { toast('Volta a gerar cartões'); telaPessoa(p.id); }); return; }
+    const qtd = (d.negocios || []).length;
+    const f = modal(`<h2>Marcar ${h(nomeOk(p.nome))} como pessoa interna?</h2>
+      <p style="font-size:14px;color:var(--tinta-2)">É para sócio, corretor ou dono. A pessoa sai da fila, do pipeline e dos números; ${qtd ? `os <b>${qtd}</b> cartão(ões) dela são apagados (o histórico de navegação e a ficha ficam)` : 'ela não ganha mais cartões'}. Dá para desfazer na própria ficha.</p>
+      <div class="rodape"><button class="btn" type="button" data-fechar>Cancelar</button><button class="btn btn-ouro" type="button" data-ok>Marcar como interno</button></div>`);
+    f.querySelector('[data-fechar]').onclick = () => f.remove();
+    f.querySelector('[data-ok]').onclick = async () => {
+      try { const r = await dados.marcarInterna(p.id, true); f.remove(); toast(r && r.ok === false ? (r.erro || 'Não deu') : 'Marcada como interna'); telaPessoa(p.id); }
+      catch (e) { toast('Não deu para marcar agora'); }
+    };
+  };
   document.querySelectorAll('[data-eraeste]').forEach(b => b.onclick = async () => {
     b.disabled = true;
     try {
