@@ -31,6 +31,8 @@
 html,body{margin:0;height:100%}
 body{background:var(--fundo);color:var(--tinta);font:400 15px/1.5 'Outfit',system-ui,sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:44px}
 a{color:inherit;text-decoration:none}
+.lk-pag{color:var(--ouro);border-bottom:1px dotted var(--ouro)}
+.lk-pag:hover{border-bottom-style:solid}
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer;border:0;background:none}
 :focus-visible{outline:2px solid var(--ouro);outline-offset:2px}
