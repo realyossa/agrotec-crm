@@ -56,6 +56,11 @@ const provSupabase = {
   // gente da casa: a regra (apagar cartoes, impedir novos) mora no banco (marcar_interna)
   async marcarInterna(pessoaId, valor) { const s = await cliente(); const { data, error } = await s.rpc('marcar_interna', { p_pessoa: pessoaId, p_valor: !!valor }); if (error) throw error; return data; },
   async atividade(a) { const s = await cliente(); const { data: u } = await s.auth.getUser(); const { error } = await s.from('atividades').insert({ ...a, quem: u?.user?.id || null }); if (error) throw error; },
+  // parceiros: rede por estado/cidade, cadastro manual na seção Parceiros
+  async parceiros() { const s = await cliente(); const { data } = await s.from('parceiros').select('*').order('uf').order('cidade').order('nome'); return data || []; },
+  async criarParceiro(campos) { const s = await cliente(); const { data: u } = await s.auth.getUser(); const { error } = await s.from('parceiros').insert({ ...campos, criado_por: u?.user?.id || null }); if (error) throw error; },
+  async editarParceiro(id, campos) { const s = await cliente(); const { error } = await s.from('parceiros').update(campos).eq('id', id); if (error) throw error; },
+  async apagarParceiro(id) { const s = await cliente(); const { error } = await s.from('parceiros').delete().eq('id', id); if (error) throw error; },
   async atualizarPerfil(id, campos) { const s = await cliente(); const { error } = await s.from('perfis').update(campos).eq('id', id); if (error) throw error; },
   async salvarConfig(chave, valor) { const s = await cliente(); const { error } = await s.from('config').upsert({ chave, valor, atualizado_em: new Date().toISOString() }); if (error) throw error; },
   aoVivo(cb) { cliente().then(s => { s.channel('console').on('postgres_changes', { event: '*', schema: 'public', table: 'negocios' }, cb)
@@ -111,7 +116,11 @@ function demoDados() {
     funis: { compra: { rotulo: 'Compra', etapas: ['Novo', 'Em contato', 'Visita agendada', 'Proposta enviada', 'Fechado', 'Perdido'] }, venda: { rotulo: 'Venda', etapas: ['Novo', 'Em contato', 'Visita a propriedade', 'Documentacao', 'Em divulgacao', 'Vendido', 'Perdido'] }, servico: { rotulo: 'Serviço', etapas: ['Novo', 'Em contato', 'Orcamento enviado', 'Agendado', 'Executado', 'Perdido'] } },
     etapas_finais: { ganhou: ['Fechado', 'Vendido', 'Executado'], perdeu: ['Perdido'] }, motivos_perda: ['Sem resposta', 'Preço', 'Região', 'Já comprou / vendeu', 'Não era o serviço', 'Dado inválido', 'Outro'],
     sla: { minutos: 30, horario: { inicio: '08:00', fim: '18:30', dias: [1, 2, 3, 4, 5, 6] } } };
-  return { pessoas, negocios, atividades, eventos, serie, kpis, motores: motoresV, origens, config, perfis };
+  const parceiros = [
+    { id: 'par1', nome: 'João Merkel', tipo: 'corretor', uf: 'SC', cidade: 'Chapecó', telefone: '5549988112233', email: '', observacao: 'Forte no oeste, fazendas de grão', ativo: true, criado_em: iso(dia(20)) },
+    { id: 'par2', nome: 'AeroCampo Drones', tipo: 'drone', uf: 'SC', cidade: 'Xanxerê', telefone: '5549977665544', email: 'contato@aerocampo.com.br', observacao: 'Voo em até 48 h na região', ativo: true, criado_em: iso(dia(12)) },
+    { id: 'par3', nome: 'Imobiliária Terra Boa', tipo: 'imobiliaria', uf: 'PR', cidade: 'Pato Branco', telefone: '5546991234567', email: '', observacao: '', ativo: true, criado_em: iso(dia(5)) }];
+  return { pessoas, negocios, atividades, eventos, serie, kpis, motores: motoresV, origens, config, perfis, parceiros };
 }
 
 const D = DEMO ? demoDados() : null;
@@ -135,6 +144,10 @@ const provDemo = {
   async editarPessoa(id, c) { Object.assign(D.pessoas.find(x => x.id === id), c); },
   async telefoneConfirmado(id, numero) { const p = D.pessoas.find(x => x.id === id); if (p) { p.telefone = numero; p.telefone_conferir = false; p.telefone_motivo = null; p.telefone_alternativas = []; } return { ok: true }; },
   async marcarInterna(id, valor) { const p = D.pessoas.find(x => x.id === id); if (p) { p.interna = !!valor; if (valor) D.negocios = D.negocios.filter(n => n.pessoa_id !== id); } return { ok: true }; },
+  async parceiros() { return espera(D.parceiros); },
+  async criarParceiro(c) { D.parceiros.push({ id: 'par' + Math.random(), criado_em: new Date().toISOString(), ativo: true, ...c }); },
+  async editarParceiro(id, c) { Object.assign(D.parceiros.find(x => x.id === id), c); },
+  async apagarParceiro(id) { D.parceiros = D.parceiros.filter(x => x.id !== id); },
   async atividade(a) { const n = D.negocios.find(x => x.id === a.negocio_id); D.atividades.push({ id: 'a' + Math.random(), em: new Date().toISOString(), perfis: D.perfis[2], quem: 'u0', ...a }); if (n && ['ligacao', 'whatsapp', 'visita', 'nota', 'repasse'].includes(a.tipo)) { n.primeiro_contato_em = n.primeiro_contato_em || new Date().toISOString(); n.ultima_atividade_em = new Date().toISOString(); } },
   async atualizarPerfil(id, c) { Object.assign(D.perfis.find(x => x.id === id), c); },
   async salvarConfig(k, v) { D.config[k] = v; },

@@ -37,6 +37,7 @@ const ICO = {
   fila: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h10M4 18h7"/><circle cx="18" cy="17" r="3"/></svg>',
   pipeline: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="11" rx="1.5"/><rect x="17" y="4" width="4" height="7" rx="1.5"/></svg>',
   pessoas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-3.5 3-5.5 6.5-5.5s6 2 6.5 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.5c3 0 5.5 1.7 6 4.5"/></svg>',
+  parceiros: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/></svg>',
   origens: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17M3.5 12h17M6 6.5c3.5 2 8.5 2 12 0M6 17.5c3.5-2 8.5-2 12 0"/></svg>',
   relatorios: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
   config: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
@@ -92,11 +93,11 @@ function classeSla(n) {
 }
 
 /* ------------------------------------------------------------- moldura */
-const ROTAS = [['visao', 'Visão geral', 'visao'], ['fila', 'Atendimento', 'fila'], ['pipeline', 'Pipeline', 'pipeline'], ['pessoas', 'Pessoas', 'pessoas'], ['origens', 'Origens', 'origens'], ['relatorios', 'Relatórios', 'relatorios'], ['config', 'Configurações', 'config']];
+const ROTAS = [['visao', 'Visão geral', 'visao'], ['fila', 'Atendimento', 'fila'], ['pipeline', 'Pipeline', 'pipeline'], ['pessoas', 'Pessoas', 'pessoas'], ['parceiros', 'Parceiros', 'parceiros'], ['origens', 'Origens', 'origens'], ['relatorios', 'Relatórios', 'relatorios'], ['config', 'Configurações', 'config']];
 function moldura(rota, conteudo, extras = {}) {
   const p = estado.perfil || {};
   const nav = ROTAS.filter(r => r[0] !== 'config' || p.papel === 'dono').map(([r, t, i]) => `<a href="#/${r}" class="${rota === r ? 'ativo' : ''}">${ICO[i]}<span>${t}</span>${r === 'fila' && extras.semContato ? `<span class="cont">${extras.semContato}</span>` : ''}</a>`).join('');
-  const inferior = ['visao', 'fila', 'pipeline', 'pessoas', 'origens'].map(r => { const R = ROTAS.find(x => x[0] === r); return `<a href="#/${r}" class="${rota === r ? 'ativo' : ''}">${ICO[R[2]]}<span>${R[1].replace('Visão geral', 'Início')}</span>${r === 'fila' && extras.semContato ? `<span class="cont">${extras.semContato}</span>` : ''}</a>`; }).join('');
+  const inferior = ['visao', 'fila', 'pipeline', 'pessoas', 'parceiros', 'origens'].map(r => { const R = ROTAS.find(x => x[0] === r); return `<a href="#/${r}" class="${rota === r ? 'ativo' : ''}">${ICO[R[2]]}<span>${R[1].replace('Visão geral', 'Início')}</span>${r === 'fila' && extras.semContato ? `<span class="cont">${extras.semContato}</span>` : ''}</a>`; }).join('');
   app.innerHTML = `<div class="moldura">
     <aside class="lateral">
       <div class="marca"><b>${h(C.cliente || 'Agrotec')} <i>Leads</i></b><small>Console de Leads</small></div>
@@ -514,6 +515,67 @@ async function telaConfig() {
     estado.config = await dados.config(); toast('Salvo'); };
 }
 
+/* ------------------------------------------------------------- parceiros */
+const UFS = ['AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO'];
+const NOME_UF = { AC: 'Acre', AL: 'Alagoas', AM: 'Amazonas', AP: 'Amapá', BA: 'Bahia', CE: 'Ceará', DF: 'Distrito Federal', ES: 'Espírito Santo', GO: 'Goiás', MA: 'Maranhão', MG: 'Minas Gerais', MS: 'Mato Grosso do Sul', MT: 'Mato Grosso', PA: 'Pará', PB: 'Paraíba', PE: 'Pernambuco', PI: 'Piauí', PR: 'Paraná', RJ: 'Rio de Janeiro', RN: 'Rio Grande do Norte', RO: 'Rondônia', RR: 'Roraima', RS: 'Rio Grande do Sul', SC: 'Santa Catarina', SE: 'Sergipe', SP: 'São Paulo', TO: 'Tocantins' };
+const TIPOS_PAR = { corretor: ['Corretor', 'c-verde'], imobiliaria: ['Imobiliária', 'c-ouro'], drone: ['Drone / imagens aéreas', 'c-azul'], arrendamento: ['Arrendamento', 'c-roxo'], outro: ['Outro', 'c-neutro'] };
+function modalParceiro(par, ufPadrao) {
+  const ed = !!par; par = par || {};
+  const f = modal(`<h2>${ed ? 'Editar parceiro' : 'Adicionar parceiro'}</h2><form id="fpar">
+    <div class="campo"><label for="par-nome">Nome</label><input id="par-nome" name="nome" required value="${h(par.nome || '')}" placeholder="Pessoa ou empresa"></div>
+    <div class="campo"><label for="par-tipo">Tipo</label><select id="par-tipo" name="tipo">${Object.entries(TIPOS_PAR).map(([k, v]) => `<option value="${k}" ${par.tipo === k ? 'selected' : ''}>${v[0]}</option>`).join('')}</select></div>
+    <div style="display:flex;gap:10px">
+      <div class="campo" style="width:110px;flex:none"><label for="par-uf">Estado</label><select id="par-uf" name="uf">${UFS.map(u => `<option ${((par.uf || ufPadrao) === u) ? 'selected' : ''}>${u}</option>`).join('')}</select></div>
+      <div class="campo" style="flex:1"><label for="par-cidade">Cidade</label><input id="par-cidade" name="cidade" required value="${h(par.cidade || '')}" placeholder="Onde ele atua"></div>
+    </div>
+    <div class="campo"><label for="par-tel">Telefone / WhatsApp</label><input id="par-tel" name="telefone" value="${h(par.telefone || '')}" placeholder="(49) 99999-0000"></div>
+    <div class="campo"><label for="par-email">E-mail</label><input id="par-email" name="email" type="email" value="${h(par.email || '')}"></div>
+    <div class="campo"><label for="par-obs">Observação</label><textarea class="nota" id="par-obs" name="observacao" placeholder="Região que cobre, como chegamos nele, combinados">${h(par.observacao || '')}</textarea></div>
+    <div class="rodape"><button class="btn" type="button" data-fechar>Cancelar</button><button class="btn btn-ouro" type="submit">${ed ? 'Salvar' : 'Adicionar'}</button></div></form>`);
+  f.querySelector('[data-fechar]').onclick = () => f.remove();
+  f.querySelector('form').onsubmit = async (e) => {
+    e.preventDefault(); const d = new FormData(e.target);
+    const campos = { nome: String(d.get('nome')).trim(), tipo: d.get('tipo'), uf: d.get('uf'), cidade: String(d.get('cidade')).trim(), telefone: String(d.get('telefone')).trim(), email: String(d.get('email')).trim(), observacao: String(d.get('observacao')).trim() };
+    try { if (ed) await dados.editarParceiro(par.id, campos); else await dados.criarParceiro(campos); f.remove(); toast('Salvo'); render(); }
+    catch (err) { toast('Não salvou: ' + (err.message || err)); }
+  };
+}
+async function telaParceiros() {
+  const lista = await dados.parceiros();
+  const porId = {}; lista.forEach(p => porId[p.id] = p);
+  const porUf = {}; lista.forEach(p => (porUf[p.uf] = porUf[p.uf] || []).push(p));
+  const souDono = estado.perfil?.papel === 'dono';
+  const ufsOrd = UFS.slice().sort((a, b) => (porUf[b]?.length || 0) - (porUf[a]?.length || 0) || NOME_UF[a].localeCompare(NOME_UF[b]));
+  const linhaPar = (p) => {
+    const [rot, cls] = TIPOS_PAR[p.tipo] || TIPOS_PAR.outro;
+    const t = tel(p.telefone); const tw = t && t.length <= 11 ? '55' + t : t; // quem cadastra digita (49) 9… sem o 55
+    return `<div class="par-item" data-id="${p.id}">
+      <div class="par-item-main"><b>${h(p.nome)}</b> <span class="chip ${cls}">${rot}</span>${p.ativo === false ? '<span class="chip c-neutro">inativo</span>' : ''}
+        <small>${h(p.cidade)}${p.observacao ? ' · ' + h(p.observacao) : ''}</small></div>
+      <div class="par-item-acoes">
+        ${t ? `<a class="btn btn-p" href="https://wa.me/${tw}" target="_blank" rel="noopener" title="WhatsApp">${ICO.wa}</a><a class="btn btn-p" href="tel:+${tw}" title="Ligar">${ICO.tel}</a>` : ''}
+        ${p.email ? `<a class="btn btn-p" href="mailto:${h(p.email)}" title="${h(p.email)}">@</a>` : ''}
+        <button class="btn btn-p" data-edit="${p.id}" title="Editar">Editar</button>
+        ${souDono ? `<button class="btn btn-p" data-del="${p.id}" title="Apagar (só o dono)">×</button>` : ''}
+      </div></div>`;
+  };
+  moldura('parceiros', `${topo('Parceiros', 'Nossa rede por estado: corretor, imobiliária, drone, arrendamento — na hora de indicar, é aqui', `<button class="btn btn-ouro" id="par-novo">+ Parceiro</button>`)}
+    <div class="cx"><div class="sub" style="margin-bottom:12px">${lista.length ? `${lista.length} parceiro(s) em ${Object.keys(porUf).length} estado(s). Estados com parceiro aparecem primeiro; toque no estado para abrir.` : 'Nenhum parceiro ainda. Comece pelo estado onde você mais precisa de braço local.'}</div>
+      ${ufsOrd.map(uf => { const ps = porUf[uf] || []; const aberto = ps.length > 0;
+        return `<div class="par-uf${aberto ? ' aberto' : ''}" data-uf="${uf}">
+          <div class="par-uf-cab" data-toggle="${uf}"><b>${uf}</b><span class="par-uf-nome">${NOME_UF[uf]}</span>
+            <span class="par-uf-res">${ps.length ? ps.length + ' · ' + [...new Set(ps.map(p => (TIPOS_PAR[p.tipo] || TIPOS_PAR.outro)[0]))].join(', ') : '—'}</span>
+            <button class="btn btn-p" data-add="${uf}" title="Adicionar parceiro em ${NOME_UF[uf]}">+</button></div>
+          <div class="par-lista">${ps.map(linhaPar).join('')}</div>
+        </div>`; }).join('')}</div>`);
+  ligarTopo();
+  document.getElementById('par-novo').onclick = () => modalParceiro(null, 'SC');
+  document.querySelectorAll('[data-toggle]').forEach(el => el.onclick = () => el.closest('.par-uf').classList.toggle('aberto'));
+  document.querySelectorAll('[data-add]').forEach(el => el.onclick = (e) => { e.stopPropagation(); modalParceiro(null, el.dataset.add); });
+  document.querySelectorAll('[data-edit]').forEach(el => el.onclick = () => modalParceiro(porId[el.dataset.edit]));
+  document.querySelectorAll('[data-del]').forEach(el => el.onclick = async () => { const p = porId[el.dataset.del]; if (!confirm(`Apagar ${p.nome} (${p.cidade}/${p.uf})? Não dá para desfazer.`)) return; try { await dados.apagarParceiro(p.id); toast('Apagado'); render(); } catch (err) { toast('Não apagou: ' + (err.message || err)); } });
+}
+
 /* --------------------------------------------------------------- roteador */
 let renderizando = false;
 async function render() {
@@ -530,6 +592,7 @@ async function render() {
       case 'fila': await telaFila(); break;
       case 'pipeline': await telaPipeline(); break;
       case 'pessoas': await telaPessoas(); break;
+      case 'parceiros': await telaParceiros(); break;
       case 'pessoa': await telaPessoa(arg); break;
       case 'origens': await telaOrigens(); break;
       case 'relatorios': await telaRelatorios(); break;
