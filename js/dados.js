@@ -39,7 +39,9 @@ const provSupabase = {
     try { const [paginas, serie, agentes, erros, desconhecidos] = await Promise.all([q('v_ia_paginas'), q('v_ia_serie'), q('v_ia_agentes'), q('v_ia_erros'), q('v_ia_desconhecidos')]);
       // v_ia_totais vem do 009: conta cada visitante/pessoa uma vez. Sem ele, o topo cai para a soma das páginas (que conta em dobro) e avisa.
       let totais = null; try { const { data, error } = await s.from('v_ia_totais').select('*').single(); if (!error) totais = data; } catch (e) {}
-      return { paginas, serie, agentes, erros, desconhecidos, totais }; }
+      // v_ia_protocolo vem do 010 (robots.txt, llms.txt, sitemap.xml à parte). Sem ele, a seção some.
+      let protocolo = []; try { const { data, error } = await s.from('v_ia_protocolo').select('*').limit(50); if (!error) protocolo = data || []; } catch (e) {}
+      return { paginas, serie, agentes, erros, desconhecidos, totais, protocolo }; }
     catch (e) { return { faltaSql: true, erro: e.message || String(e) }; } },
   async origensEvento() { const s = await cliente(); const { data } = await s.from('v_origens_evento').select('*'); return data || []; },
   async fila() { const s = await cliente(); const { data } = await s.from('v_fila').select('*').order('criado_em', { ascending: false }).limit(500); return data || []; },
