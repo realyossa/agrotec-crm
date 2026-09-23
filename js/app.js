@@ -477,28 +477,32 @@ async function telaIA() {
     moldura('ia', `${topo('IA lendo o site', 'Robôs e agentes de IA que abrem as páginas')}<div class="cx"><h2>Falta ligar o banco</h2><p style="color:var(--tinta-2)">Rode <span class="mono">supabase/008_ai_visibility.sql</span> no SQL Editor do Supabase e ponha <span class="mono">AGENTES_GRAVAR=1</span> nas variáveis do Netlify do site. Enquanto isso a detecção funciona só no log da Edge Function.</p><p style="font-size:12px;color:var(--tinta-3)">${h(d.erro || '')}</p></div>`);
     return ligarTopo();
   }
-  const soma = (k) => d.paginas.reduce((a, p) => a + (Number(p[k]) || 0), 0);
-  const falsos = d.agentes.reduce((a, x) => a + (Number(x.falsos) || 0), 0);
+  // Totais contados uma vez (v_ia_totais, 009). A soma das páginas conta em dobro quem viu várias páginas.
+  const T = d.totais || {};
+  const soma = (k) => T[k] != null ? Number(T[k]) : d.paginas.reduce((a, p) => a + (Number(p[k]) || 0), 0);
+  const falsos = T.falsos != null ? Number(T.falsos) : d.agentes.reduce((a, x) => a + (Number(x.falsos) || 0), 0);
+  const diasMedindo = T.medindo_desde ? Math.floor((Date.now() - new Date(T.medindo_desde + 'T12:00:00')) / 86400000) : 0;
   const lidas = d.paginas.filter(p => p.leituras_ao_vivo > 0 || p.visitantes_vindos_de_ia > 0);
-  const nunca = d.paginas.filter(p => !p.leituras_ao_vivo && !p.indice_ia && p.buscadores > 0);
+  // Só depois de 7 dias medindo: antes disso toda página nova cai aqui e vira ruído.
+  const nunca = diasMedindo >= 7 ? d.paginas.filter(p => !p.leituras_ao_vivo && !p.indice_ia && p.buscadores > 0) : [];
   const maxL = Math.max(1, ...lidas.map(p => p.leituras_ao_vivo));
   const cab = (cols) => `<div class="funil-ev" style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--tinta-3)">${cols.map(c => `<div>${c}</div>`).join('')}</div>`;
-  moldura('ia', `${topo('IA lendo o site', 'Quem é máquina, o que leu e o que isso virou · 28 dias')}
+  moldura('ia', `${topo('IA lendo o site', 'Quem é máquina, o que leu e o que isso virou · 28 dias' + (T.medindo_desde ? ` · robôs medidos desde ${fmtDia(T.medindo_desde)}` : ''))}
     <div class="kpis">
       <div class="kpi"><div class="cab">${ICO.ia}</div><b class="num">${soma('leituras_ao_vivo')}</b><span>leituras ao vivo · alguém perguntou à IA e ela abriu a página</span></div>
       <div class="kpi"><div class="cab">${ICO.busca}</div><b class="num">${soma('indice_ia')}</b><span>acessos de índice de IA</span></div>
-      <div class="kpi"><div class="cab">${ICO.pessoas}</div><b class="num">${soma('visitantes_vindos_de_ia')}</b><span>pessoas que chegaram vindas de IA · ${soma('leads_vindos_de_ia')} viraram lead</span></div>
+      <div class="kpi"><div class="cab">${ICO.pessoas}</div><b class="num">${soma('visitantes_vindos_de_ia')}</b><span>pessoas que chegaram vindas de IA · ${soma('leads_vindos_de_ia')} se identificaram${d.totais ? '' : ' · falta rodar o 009 (conta em dobro)'}</span></div>
       <div class="kpi"><div class="cab">${ICO.cadeado}</div><b class="num">${falsos}</b><span>acessos com nome de robô e IP falso · fora das contas</span></div>
     </div>
     <div class="cx" style="margin-bottom:14px"><h2>Páginas que a IA abriu para responder alguém</h2><div class="sub">Leitura ao vivo → gente que chegou vinda de IA → lead. A última ponta já existia em Origens; aqui ela encontra a leitura.</div>
-      ${cab(['Página', 'Ao vivo', 'Índice IA', 'Pessoas via IA', 'Leads', ''])}
+      ${cab(['Página', 'Ao vivo', 'Índice IA', 'Pessoas via IA', 'Identificadas', ''])}
       ${lidas.map(p => `<div class="funil-ev"><div>${linkPag(p.caminho)}</div><div class="n num">${p.leituras_ao_vivo}</div><div class="n num">${p.indice_ia}</div><div class="n num">${p.visitantes_vindos_de_ia}</div><div class="n num">${p.leads_vindos_de_ia}</div><div class="barra"><i style="width:${Math.round(100 * p.leituras_ao_vivo / maxL)}%"></i></div></div>`).join('') || '<p class="vazio">Nenhuma leitura ao vivo nos últimos 28 dias.</p>'}</div>
     <div class="cx" style="margin-bottom:14px"><h2>Endereços que robô pediu e não existem</h2><div class="sub">Cada linha é uma IA ou buscador tentando usar um link nosso que dá erro. Candidato a redirect em <span class="mono">_redirects</span>.</div>
       ${d.erros.map(e => `<div class="funil-ev"><div class="mono">${h(e.caminho)}</div><div class="n num">${e.n}</div><div style="grid-column:1/-1;color:var(--tinta-3);font-size:13px">${h(e.agentes)}</div></div>`).join('') || '<p class="vazio">Nenhum. Bom sinal.</p>'}</div>
     <div class="cx" style="margin-bottom:14px"><h2>Quem leu</h2><div class="sub">Verificado = o IP confere com a lista publicada pela própria empresa.</div>
       ${cab(['Robô', '28 dias', 'Verificados', 'Falsos', 'Tipo', ''])}
       ${d.agentes.map(a => `<div class="funil-ev"><div><b>${h(a.agente)}</b></div><div class="n num">${a.total_28d}</div><div class="n num">${a.verificados ?? '—'}</div><div class="n num">${a.falsos ?? '—'}</div><div>${chipFin(a.finalidade)}</div><div></div></div>`).join('') || '<p class="vazio">Sem acessos registrados ainda.</p>'}</div>
-    ${nunca.length ? `<div class="cx" style="margin-bottom:14px"><h2>Buscador leu, IA nunca</h2><div class="sub">O Google conhece, nenhuma IA abriu. Olhar primeiro parágrafo, links internos e FAQ.</div>${nunca.slice(0, 15).map(p => `<div class="funil-ev"><div>${linkPag(p.caminho)}</div><div class="n num">${p.buscadores}</div><div style="grid-column:1/-1"></div></div>`).join('')}</div>` : ''}
+    ${nunca.length ? `<div class="cx" style="margin-bottom:14px"><h2>Buscador leu, IA nunca</h2><div class="sub">Um buscador conhece, nenhuma IA abriu em 28 dias. Olhar primeiro parágrafo, links internos e FAQ.</div>${nunca.slice(0, 15).map(p => `<div class="funil-ev"><div>${linkPag(p.caminho)}</div><div class="n num">${p.buscadores}</div><div style="grid-column:1/-1"></div></div>`).join('')}</div>` : ''}
     <div class="cx"><h2>Robôs sem regra</h2><div class="sub">Parecem robô e o site ainda não sabe quem são. Se for de IA, vira regra em <span class="mono">netlify/lib/agentes.mjs</span>.</div>
       ${d.desconhecidos.map(x => `<div class="funil-ev"><div class="mono" style="grid-column:1/-1;font-size:12px;word-break:break-all">${h(x.ua_exemplo)}</div><div class="n num">${x.n}</div><div style="color:var(--tinta-3);font-size:12px">${relativo(x.ultimo_em)}</div></div>`).join('') || '<p class="vazio">Nenhum.</p>'}</div>`);
   ligarTopo();
