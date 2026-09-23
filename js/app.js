@@ -93,7 +93,7 @@ function classeSla(n) {
 }
 
 /* ------------------------------------------------------------- moldura */
-const ROTAS = [['visao', 'Visão geral', 'visao'], ['fila', 'Atendimento', 'fila'], ['pipeline', 'Pipeline', 'pipeline'], ['pessoas', 'Pessoas', 'pessoas'], ['parceiros', 'Parceiros', 'parceiros'], ['origens', 'Origens', 'origens'], ['relatorios', 'Relatórios', 'relatorios'], ['config', 'Configurações', 'config']];
+const ROTAS = [['visao', 'Visão geral', 'visao'], ['fila', 'Atendimento', 'fila'], ['pipeline', 'Pipeline', 'pipeline'], ['pessoas', 'Pessoas', 'pessoas'], ['parceiros', 'Parceiros', 'parceiros'], ['origens', 'Origens', 'origens'], ['ia', 'IA lendo o site', 'ia'], ['relatorios', 'Relatórios', 'relatorios'], ['config', 'Configurações', 'config']];
 function moldura(rota, conteudo, extras = {}) {
   const p = estado.perfil || {};
   const nav = ROTAS.filter(r => r[0] !== 'config' || p.papel === 'dono').map(([r, t, i]) => `<a href="#/${r}" class="${rota === r ? 'ativo' : ''}">${ICO[i]}<span>${t}</span>${r === 'fila' && extras.semContato ? `<span class="cont">${extras.semContato}</span>` : ''}</a>`).join('');
@@ -454,7 +454,7 @@ async function telaOrigens() {
   const ia = motores.filter(m => m.origem_tipo === 'ia'), busca = motores.filter(m => m.origem_tipo === 'busca'), resto = motores.filter(m => !['ia', 'busca'].includes(m.origem_tipo));
   const linhaMotor = m => `<div class="funil-ev"><div><b>${h(m.motor)}</b> <span class="chip ${m.origem_tipo === 'ia' ? 'c-ouro' : m.origem_tipo === 'busca' ? 'c-verde' : 'c-neutro'}">${h(m.origem_tipo)}</span></div><div class="n num">${m.visitantes_30d}</div><div class="n num">${m.cliques_30d}</div><div class="n num">${m.pessoas_30d}</div><div class="num">${m.visitantes_30d ? (m.pessoas_30d / m.visitantes_30d * 100).toFixed(1) + '%' : '—'}</div><div class="barra"><i style="width:${Math.min(100, m.cliques_30d / Math.max(1, ...motores.map(x => x.cliques_30d)) * 100)}%;background:${corMotor(m.motor, m.origem_tipo)}"></i></div></div>`;
   moldura('origens', `${topo('Origens', 'Qual botão, página e canal trazem lead que vira negócio')}
-    <div class="cx" style="margin-bottom:14px"><h2>Motores e canais · 30 dias</h2><div class="sub">Visitantes, cliques de contato e pessoas identificadas por onde chegaram. IA em dourado.</div>
+    <div class="cx" style="margin-bottom:14px"><h2>Motores e canais · 30 dias</h2><div class="sub">Visitantes, cliques de contato e pessoas identificadas por onde chegaram. IA em dourado. Robôs e IAs que leem o site (não aparecem aqui): <a href="#/ia" style="color:var(--ouro)">IA lendo o site</a>.</div>
       <div class="funil-ev" style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--tinta-3)"><div>Motor</div><div>Visitantes</div><div>Cliques</div><div>Pessoas</div><div>Taxa</div><div></div></div>
       ${ia.map(linhaMotor).join('')}${busca.map(linhaMotor).join('')}${resto.map(linhaMotor).join('') || ''}${motores.length ? '' : '<p class="vazio">Sem visitas medidas ainda.</p>'}</div>
     <div class="cx" style="margin-bottom:14px"><h2>Botões de contato · 30 dias</h2><div class="sub">Cada nome é um identificador fixo do registro. O que varia (página, rótulo, interesse) fica na ficha da pessoa.</div>
@@ -463,6 +463,44 @@ async function telaOrigens() {
       ${registrados.length ? `<p style="font-size:13px;color:var(--tinta-3);margin-top:12px">No registro e nunca clicados: ${registrados.map(x => `<span class="mono">${h(x)}</span>`).join(', ')}</p>` : ''}</div>
     <div class="cx"><h2>Leitura e formulários</h2><div class="sub">Páginas vistas, leitura, formulários vistos e começados, FAQ, busca.</div>
       ${outros.map(o => `<div class="funil-ev"><div><b class="mono">${h(o.nome)}</b><br><small style="color:var(--tinta-3)">${h(reg[o.nome]?.o_que || '')}</small></div><div class="n num">${o.ultimos_30d}</div><div class="n num">${o.ultimos_14d}</div><div class="num">${o.visitantes}</div><div class="num">${o.identificados}</div><div></div></div>`).join('') || '<p class="vazio">Nada ainda.</p>'}</div>`);
+  ligarTopo();
+}
+
+/* ------------------------------------------------------------ IA lendo o site */
+// Dados da Edge Function do site (netlify/edge-functions/agentes.js) -> 008_ai_visibility.sql.
+// Robô não roda JavaScript: nada disto aparece no GA4 nem em Origens.
+const FIN_ROT = { leitura_ia: ['Leitura ao vivo', 'c-ouro'], agente_ia: ['Agente de IA', 'c-ouro'], busca_ia: ['Índice de IA', 'c-laranja'], treino: ['Treino', 'c-neutro'], busca: ['Buscador', 'c-verde'], previa: ['Prévia de link', 'c-azul'], seo: ['SEO', 'c-neutro'], monitor: ['Monitor', 'c-neutro'], script: ['Script', 'c-vermelho'], bot_desconhecido: ['Desconhecido', 'c-vermelho'] };
+const chipFin = (f) => { const m = FIN_ROT[f] || [f, 'c-neutro']; return `<span class="chip ${m[1]}">${h(m[0])}</span>`; };
+async function telaIA() {
+  const d = await dados.ia();
+  if (d.faltaSql) {
+    moldura('ia', `${topo('IA lendo o site', 'Robôs e agentes de IA que abrem as páginas')}<div class="cx"><h2>Falta ligar o banco</h2><p style="color:var(--tinta-2)">Rode <span class="mono">supabase/008_ai_visibility.sql</span> no SQL Editor do Supabase e ponha <span class="mono">AGENTES_GRAVAR=1</span> nas variáveis do Netlify do site. Enquanto isso a detecção funciona só no log da Edge Function.</p><p style="font-size:12px;color:var(--tinta-3)">${h(d.erro || '')}</p></div>`);
+    return ligarTopo();
+  }
+  const soma = (k) => d.paginas.reduce((a, p) => a + (Number(p[k]) || 0), 0);
+  const falsos = d.agentes.reduce((a, x) => a + (Number(x.falsos) || 0), 0);
+  const lidas = d.paginas.filter(p => p.leituras_ao_vivo > 0 || p.visitantes_vindos_de_ia > 0);
+  const nunca = d.paginas.filter(p => !p.leituras_ao_vivo && !p.indice_ia && p.buscadores > 0);
+  const maxL = Math.max(1, ...lidas.map(p => p.leituras_ao_vivo));
+  const cab = (cols) => `<div class="funil-ev" style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--tinta-3)">${cols.map(c => `<div>${c}</div>`).join('')}</div>`;
+  moldura('ia', `${topo('IA lendo o site', 'Quem é máquina, o que leu e o que isso virou · 28 dias')}
+    <div class="kpis">
+      <div class="kpi"><div class="cab">${ICO.ia}</div><b class="num">${soma('leituras_ao_vivo')}</b><span>leituras ao vivo · alguém perguntou à IA e ela abriu a página</span></div>
+      <div class="kpi"><div class="cab">${ICO.busca}</div><b class="num">${soma('indice_ia')}</b><span>acessos de índice de IA</span></div>
+      <div class="kpi"><div class="cab">${ICO.pessoas}</div><b class="num">${soma('visitantes_vindos_de_ia')}</b><span>pessoas que chegaram vindas de IA · ${soma('leads_vindos_de_ia')} viraram lead</span></div>
+      <div class="kpi"><div class="cab">${ICO.cadeado}</div><b class="num">${falsos}</b><span>acessos com nome de robô e IP falso · fora das contas</span></div>
+    </div>
+    <div class="cx" style="margin-bottom:14px"><h2>Páginas que a IA abriu para responder alguém</h2><div class="sub">Leitura ao vivo → gente que chegou vinda de IA → lead. A última ponta já existia em Origens; aqui ela encontra a leitura.</div>
+      ${cab(['Página', 'Ao vivo', 'Índice IA', 'Pessoas via IA', 'Leads', ''])}
+      ${lidas.map(p => `<div class="funil-ev"><div>${linkPag(p.caminho)}</div><div class="n num">${p.leituras_ao_vivo}</div><div class="n num">${p.indice_ia}</div><div class="n num">${p.visitantes_vindos_de_ia}</div><div class="n num">${p.leads_vindos_de_ia}</div><div class="barra"><i style="width:${Math.round(100 * p.leituras_ao_vivo / maxL)}%"></i></div></div>`).join('') || '<p class="vazio">Nenhuma leitura ao vivo nos últimos 28 dias.</p>'}</div>
+    <div class="cx" style="margin-bottom:14px"><h2>Endereços que robô pediu e não existem</h2><div class="sub">Cada linha é uma IA ou buscador tentando usar um link nosso que dá erro. Candidato a redirect em <span class="mono">_redirects</span>.</div>
+      ${d.erros.map(e => `<div class="funil-ev"><div class="mono">${h(e.caminho)}</div><div class="n num">${e.n}</div><div style="grid-column:1/-1;color:var(--tinta-3);font-size:13px">${h(e.agentes)}</div></div>`).join('') || '<p class="vazio">Nenhum. Bom sinal.</p>'}</div>
+    <div class="cx" style="margin-bottom:14px"><h2>Quem leu</h2><div class="sub">Verificado = o IP confere com a lista publicada pela própria empresa.</div>
+      ${cab(['Robô', '28 dias', 'Verificados', 'Falsos', 'Tipo', ''])}
+      ${d.agentes.map(a => `<div class="funil-ev"><div><b>${h(a.agente)}</b></div><div class="n num">${a.total_28d}</div><div class="n num">${a.verificados ?? '—'}</div><div class="n num">${a.falsos ?? '—'}</div><div>${chipFin(a.finalidade)}</div><div></div></div>`).join('') || '<p class="vazio">Sem acessos registrados ainda.</p>'}</div>
+    ${nunca.length ? `<div class="cx" style="margin-bottom:14px"><h2>Buscador leu, IA nunca</h2><div class="sub">O Google conhece, nenhuma IA abriu. Olhar primeiro parágrafo, links internos e FAQ.</div>${nunca.slice(0, 15).map(p => `<div class="funil-ev"><div>${linkPag(p.caminho)}</div><div class="n num">${p.buscadores}</div><div style="grid-column:1/-1"></div></div>`).join('')}</div>` : ''}
+    <div class="cx"><h2>Robôs sem regra</h2><div class="sub">Parecem robô e o site ainda não sabe quem são. Se for de IA, vira regra em <span class="mono">netlify/lib/agentes.mjs</span>.</div>
+      ${d.desconhecidos.map(x => `<div class="funil-ev"><div class="mono" style="grid-column:1/-1;font-size:12px;word-break:break-all">${h(x.ua_exemplo)}</div><div class="n num">${x.n}</div><div style="color:var(--tinta-3);font-size:12px">${relativo(x.ultimo_em)}</div></div>`).join('') || '<p class="vazio">Nenhum.</p>'}</div>`);
   ligarTopo();
 }
 
@@ -595,6 +633,7 @@ async function render() {
       case 'parceiros': await telaParceiros(); break;
       case 'pessoa': await telaPessoa(arg); break;
       case 'origens': await telaOrigens(); break;
+      case 'ia': await telaIA(); break;
       case 'relatorios': await telaRelatorios(); break;
       case 'config': await telaConfig(); break;
       default: await telaVisao();

@@ -33,6 +33,11 @@ const provSupabase = {
   async serie(dias = 28) { const s = await cliente(); const { data } = await s.from('v_serie_diaria').select('*'); return (data || []).slice(-dias); },
   async pessoasPorDia() { const s = await cliente(); const { data } = await s.from('v_pessoas_por_dia').select('*'); return data || []; },
   async motores() { const s = await cliente(); const { data } = await s.from('v_motores').select('*'); return data || []; },
+  // Aba IA (008_ai_visibility.sql). Se o SQL ainda não foi rodado, as views não
+  // existem: devolve faltaSql em vez de quebrar a tela.
+  async ia() { const s = await cliente(); const q = async (v, ord) => { let r = s.from(v).select('*'); if (ord) r = r.order(ord, { ascending: false }); const { data, error } = await r.limit(200); if (error) throw error; return data || []; };
+    try { const [paginas, serie, agentes, erros, desconhecidos] = await Promise.all([q('v_ia_paginas'), q('v_ia_serie'), q('v_ia_agentes'), q('v_ia_erros'), q('v_ia_desconhecidos')]); return { paginas, serie, agentes, erros, desconhecidos }; }
+    catch (e) { return { faltaSql: true, erro: e.message || String(e) }; } },
   async origensEvento() { const s = await cliente(); const { data } = await s.from('v_origens_evento').select('*'); return data || []; },
   async fila() { const s = await cliente(); const { data } = await s.from('v_fila').select('*').order('criado_em', { ascending: false }).limit(500); return data || []; },
   async pessoas(q) { const s = await cliente(); let r = s.from('pessoas').select('*, negocios(*)').order('criado_em', { ascending: false }).limit(300);
@@ -132,7 +137,10 @@ const provDemo = {
   async recuperar() {}, async trocarSenha() {}, aoMudarAuth() {},
   async perfil() { return D.perfis[2]; }, async perfis() { return D.perfis; }, async config() { return D.config; },
   async kpis() { return espera(D.kpis); }, async serie(dias = 28) { return espera(D.serie.slice(-dias)); },
-  async pessoasPorDia() { return []; }, async motores() { return espera(D.motores); }, async origensEvento() { return espera(D.origens); },
+  async pessoasPorDia() { return []; }, async motores() { return espera(D.motores); }, async ia() { return espera({
+    paginas: [{ caminho: '/preco-da-terra', leituras_ao_vivo: 14, indice_ia: 9, treino: 22, buscadores: 61, visitantes_vindos_de_ia: 6, leads_vindos_de_ia: 1 }, { caminho: '/chacaras-chapeco', leituras_ao_vivo: 5, indice_ia: 4, treino: 11, buscadores: 40, visitantes_vindos_de_ia: 2, leads_vindos_de_ia: 0 }, { caminho: '/glossario-rural', leituras_ao_vivo: 0, indice_ia: 2, treino: 18, buscadores: 33, visitantes_vindos_de_ia: 0, leads_vindos_de_ia: 0 }],
+    serie: [], agentes: [{ agente: 'ChatGPT-User', finalidade: 'leitura_ia', total_28d: 12, verificados: 11, falsos: 1 }, { agente: 'Googlebot', finalidade: 'busca', total_28d: 410, verificados: 398, falsos: 12 }, { agente: 'GPTBot', finalidade: 'treino', total_28d: 57, verificados: 57, falsos: 0 }],
+    erros: [{ caminho: '/fazendas-tocantins', agentes: 'ChatGPT-User', n: 3 }], desconhecidos: [{ chave: 'NovoBot/N', ua_exemplo: 'NovoBot/1.2 (+https://exemplo.ai)', n: 4, ultimo_em: new Date().toISOString() }] }); }, async origensEvento() { return espera(D.origens); },
   async fila() { return espera(D.negocios.map(n => { const p = D.pessoas.find(x => x.id === n.pessoa_id); const c = D.perfis.find(x => x.id === n.corretor_id);
     return { ...n, pessoa_nome: p.nome, telefone: p.telefone, telefone_fmt: p.telefone_fmt, codigo: p.codigo, pessoa_cidade: p.cidade, cidade_ip: p.cidade_ip, esteve_no_site: p.esteve_no_site, origem_conversao: p.origem_conversao, origem_primeira: p.origem_primeira, visitas: p.visitas, leitura: p.leitura, corretor_nome: c?.nome,
       minutos_ate_contato: (new Date(n.primeiro_contato_em || Date.now()) - new Date(n.criado_em)) / 60000, sem_contato: !n.primeiro_contato_em, horas_parado: (Date.now() - new Date(n.ultima_atividade_em || n.criado_em)) / 3600000 }; })); },
