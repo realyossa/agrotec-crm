@@ -30,11 +30,26 @@
 --
 -- Idempotente: pode rodar duas vezes. Aplicar pelo SQL Editor do Supabase
 -- (projeto agrotec-crm). Testado em Postgres 16 com 001–010 aplicados.
--- Substitui o ingerir_lead INTEIRO (versao do 006 + os tres trechos acima):
--- se alguem mexeu nele direto no painel depois do 006, conferir antes.
+-- Substitui o ingerir_lead INTEIRO (versao do 006 + os tres trechos acima).
+-- O passo 0 confere sozinho que a de producao e a do 006; se nao for, para
+-- sem mudar nada.
 -- =====================================================================
 
 begin;
+
+-- 0. TRAVA DE SEGURANÇA: esta migração substitui o ingerir_lead INTEIRO.
+-- Se o de produção não for exatamente o do 006 (ou já o do 011, quando se
+-- roda de novo), alguém mexeu nele direto no painel: para tudo e não muda nada.
+do $$
+declare h text;
+begin
+  select md5(prosrc) into h from pg_proc
+   where proname = 'ingerir_lead' and pronamespace = 'public'::regnamespace;
+  if h is null or h not in ('9d9ec4f0643139535b365a69f80d101d',   -- 006
+                            '5354d460ed30d9ff2846c187e1e8c1c2') then -- 011
+    raise exception 'PAROU: o ingerir_lead de producao nao e o do 006 (hash %). Nada foi alterado. Mande esta mensagem para o Claude.', h;
+  end if;
+end $$;
 
 -- 1. restrição do funil --------------------------------------------------
 -- Tira QUALQUER check sobre a coluna funil, seja qual for o nome (o banco de
