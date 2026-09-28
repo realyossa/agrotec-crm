@@ -63,7 +63,12 @@ function chipOrigem(o) {
   const via = tipo === 'ia' ? (o.via === 'utm' ? ' (via link)' : o.via === 'ambos' ? '' : '') : '';
   return `<span class="chip ${cls}" title="${h(tipo)} · ${h(o.via || '')} · ${h(o.referrer_host || '')}">${tipo === 'ia' ? ICO.ia : tipo === 'busca' ? ICO.busca : ''}${h(motor)}${via}</span>`;
 }
-function chipFunil(f) { const m = { compra: ['Compra', 'c-verde'], venda: ['Venda', 'c-ouro'], servico: ['Serviço', 'c-azul'] }[f] || [f || '—', 'c-neutro']; return `<span class="chip ${m[1]}">${h(m[0])}</span>`; }
+function chipFunil(f) { const m = { analise: ['Em análise', 'c-roxo'], compra: ['Compra', 'c-verde'], venda: ['Venda', 'c-ouro'], servico: ['Serviço', 'c-azul'] }[f] || [f || '—', 'c-neutro']; return `<span class="chip ${m[1]}">${h(m[0])}</span>`; }
+/* Ordem de leitura dos funis (28/09/2026): "Em análise" primeiro, porque é a
+   triagem — quem chegou sem dizer se compra ou vende. O banco devolve as
+   chaves do jsonb em ordem própria; funil desconhecido vai para o fim. */
+const ORDEM_FUNIS = ['analise', 'compra', 'venda', 'servico'];
+const ordenarFunis = (ks) => ks.slice().sort((a, b) => (ORDEM_FUNIS.indexOf(a) + 1 || 99) - (ORDEM_FUNIS.indexOf(b) + 1 || 99));
 function chipEtapa(e) { const fins = estado.config?.etapas_finais || { ganhou: [], perdeu: [] }; const cls = fins.ganhou.includes(e) ? 'c-verde' : fins.perdeu.includes(e) ? 'c-vermelho' : e === 'Novo' ? 'c-azul' : 'c-laranja'; return `<span class="chip ${cls}">${h(e)}</span>`; }
 function toast(msg) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 2200); }
 async function copiar(txt) { try { await navigator.clipboard.writeText(txt); toast('Copiado'); } catch { const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); toast('Copiado'); } }
@@ -116,7 +121,7 @@ function topo(titulo, sub, acoes = '') {
     <button class="btn btn-p" id="tema" title="Trocar entre claro e escuro">${estado.tema === 'noite' ? ICO.sol + ' Claro' : ICO.lua + ' Escuro'}</button><span class="vivo"><i></i>ao vivo</span>${acoes}</div></div>`;
 }
 function ligarTopo() { const b = document.getElementById('tema'); if (b) b.onclick = () => { estado.tema = estado.tema === 'noite' ? 'campo' : 'noite'; guardar('tema', estado.tema); document.documentElement.setAttribute('data-tema', estado.tema); render(); }; }
-function recorteHtml() { return `<div class="seg" id="recorte">${[['todos', 'Todos'], ['compra', 'Compra'], ['venda', 'Venda'], ['servico', 'Serviço']].map(([k, t]) => `<button data-r="${k}" class="${estado.recorte === k ? 'ativo' : ''}">${t}</button>`).join('')}</div>`; }
+function recorteHtml() { return `<div class="seg" id="recorte">${[['todos', 'Todos'], ['analise', 'Em análise'], ['compra', 'Compra'], ['venda', 'Venda'], ['servico', 'Serviço']].map(([k, t]) => `<button data-r="${k}" class="${estado.recorte === k ? 'ativo' : ''}">${t}</button>`).join('')}</div>`; }
 function ligarRecorte() { const s = document.getElementById('recorte'); if (s) s.querySelectorAll('button').forEach(b => b.onclick = () => { estado.recorte = b.dataset.r; render(); }); }
 const noRecorte = (n) => estado.recorte === 'todos' || n.funil === estado.recorte;
 
@@ -288,7 +293,7 @@ let arrastando = null;
 async function telaPipeline() {
   const fila = (await dados.fila()).filter(noRecorte);
   const funis = estado.config?.funis || {};
-  const chaves = estado.recorte === 'todos' ? Object.keys(funis) : [estado.recorte];
+  const chaves = estado.recorte === 'todos' ? ordenarFunis(Object.keys(funis)) : [estado.recorte];
   const secoes = chaves.map(f => { const et = funis[f]?.etapas || ['Novo']; const itens = fila.filter(n => n.funil === f);
     return `<section style="margin-bottom:22px"><h2 style="font-size:15px;color:var(--tinta-2);margin:0 0 10px">${h(funis[f]?.rotulo || f)} <small style="color:var(--tinta-3)">· ${itens.length}</small></h2>
       <div class="pipeline">${et.map(e => { const l = itens.filter(n => n.etapa === e); return `<div class="coluna" data-funil="${f}" data-etapa="${h(e)}"><header><i style="background:${corEtapa(e)}"></i>${h(e)}<span class="n num">${l.length}</span></header>
@@ -324,7 +329,7 @@ async function mover(id, etapa) {
 }
 function modalEtapa(id, funil, etapaAtual, pessoaId) {
   const funis = estado.config?.funis || {}; const et = funis[funil]?.etapas || [];
-  const f = modal(`<h2>Mudar etapa</h2><form id="fetapa"><div class="campo"><label>Funil</label><select name="funil">${Object.keys(funis).map(k => `<option value="${k}" ${k === funil ? 'selected' : ''}>${h(funis[k].rotulo)}</option>`).join('')}</select></div>
+  const f = modal(`<h2>Mudar etapa</h2><form id="fetapa"><div class="campo"><label>Funil</label><select name="funil">${ordenarFunis(Object.keys(funis)).map(k => `<option value="${k}" ${k === funil ? 'selected' : ''}>${h(funis[k].rotulo)}</option>`).join('')}</select></div>
     <div class="campo"><label>Etapa</label><select name="etapa">${et.map(e => `<option ${e === etapaAtual ? 'selected' : ''}>${h(e)}</option>`).join('')}</select></div>
     <div class="rodape"><a class="btn" href="#/pessoa/${pessoaId}">Abrir a pessoa</a><button class="btn btn-ouro" type="submit">Salvar</button></div></form>`);
   const sf = f.querySelector('[name=funil]'), se = f.querySelector('[name=etapa]');
@@ -427,7 +432,7 @@ async function telaPessoa(id) {
 function modalNegocio(n, p) {
   const funis = estado.config?.funis || {}; const tipos = estado.config?.tipos || []; const perfis = estado.perfisLista || [];
   const f = modal(`<h2>${n ? 'Editar negócio' : 'Novo negócio'}</h2><form id="fneg">
-    <div class="campo"><label>Funil</label><select name="funil">${Object.keys(funis).map(k => `<option value="${k}" ${n?.funil === k ? 'selected' : ''}>${h(funis[k].rotulo)}</option>`).join('')}</select></div>
+    <div class="campo"><label>Funil</label><select name="funil">${ordenarFunis(Object.keys(funis)).map(k => `<option value="${k}" ${n?.funil === k ? 'selected' : ''}>${h(funis[k].rotulo)}</option>`).join('')}</select></div>
     <div class="campo"><label>Tipo</label><select name="tipo"><option value="">—</option>${tipos.map(t => `<option ${n?.tipo === t ? 'selected' : ''}>${h(t)}</option>`).join('')}</select></div>
     <div class="campo"><label>Cidade / região</label><input name="cidade" value="${h(n?.cidade || p.cidade || '')}"></div>
     <div class="campo"><label>Área (ha)</label><input name="area_ha" type="number" step="0.1" value="${n?.area_ha ?? ''}"></div>
