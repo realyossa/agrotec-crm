@@ -30,12 +30,26 @@
 --
 -- Idempotente: pode rodar duas vezes. Aplicar pelo SQL Editor do Supabase
 -- (projeto agrotec-crm). Testado em Postgres 16 com 001–010 aplicados.
+-- Substitui o ingerir_lead INTEIRO (versao do 006 + os tres trechos acima):
+-- se alguem mexeu nele direto no painel depois do 006, conferir antes.
 -- =====================================================================
 
 begin;
 
 -- 1. restrição do funil --------------------------------------------------
-alter table public.negocios drop constraint if exists negocios_funil_check;
+-- Tira QUALQUER check sobre a coluna funil, seja qual for o nome (o banco de
+-- producao pode ter nome diferente do que o 001 gera), e poe o novo.
+do $$
+declare c record;
+begin
+  for c in
+    select conname from pg_constraint
+     where conrelid = 'public.negocios'::regclass and contype = 'c'
+       and pg_get_constraintdef(oid) ~ '\mfunil\M'
+  loop
+    execute format('alter table public.negocios drop constraint %I', c.conname);
+  end loop;
+end $$;
 alter table public.negocios add constraint negocios_funil_check
   check (funil in ('compra','venda','servico','analise'));
 
@@ -163,7 +177,22 @@ begin
      where pessoa_id = v_pessoa and funil = 'analise' and fechado_em is null
      order by coalesce(ultima_atividade_em, criado_em) desc limit 1;
     if v_negocio is not null then
-      update public.negocios set funil = v_funil where id = v_negocio;
+      -- o formulario que qualificou traz o que o cartao em analise nao tinha:
+      -- tipo, interesse, area, cidade. A origem (1o toque) fica como estava.
+      update public.negocios set
+        funil = v_funil,
+        tipo = case when coalesce(nullif(d->>'tipo',''),'Outro') <> 'Outro' or coalesce(tipo,'') = '' then left(coalesce(nullif(d->>'tipo',''), tipo),40) else tipo end,
+        interesse = coalesce(nullif(left(d->>'interesse',200),''), interesse),
+        cidade = coalesce(nullif(left(d->>'cidade',80),''), cidade),
+        regiao = coalesce(nullif(left(d->>'regiao',80),''), regiao),
+        area_ha = coalesce(nullif(regexp_replace(coalesce(d->>'area',''), '[^0-9.,]', '', 'g'),'')::numeric, area_ha),
+        pontuacao = greatest(coalesce(pontuacao,0),
+            (case when fone is not null and length(fone) between 12 and 13 then 30 else 0 end)
+          + (case when coalesce(nullif(d->>'leitura','')::int,0) >= 50 then 15 else 0 end)
+          + (case when coalesce(nullif(d->>'visitas','')::int,1) > 1 then 15 else 0 end)
+          + least(historico, 20)
+          + (case when length(coalesce(d->>'descricao','')) > 40 then 20 else 0 end))
+      where id = v_negocio;
     end if;
   end if;
 
@@ -231,14 +260,27 @@ commit;
 -- estão parados em Compra/Novo. Rode o SELECT; se a lista fizer sentido,
 -- rode o UPDATE (a mudança de funil fica registrada na linha do tempo).
 --
+-- So entra cartao cuja TODA entrada pelo site foi a trava (JS ou webhook do
+-- form conteudo-acesso): cartao que depois recebeu pedido de compra real fica.
+--
 -- select n.id, p.codigo, p.nome, n.criado_em, n.origem_rotulo
 --   from public.negocios n join public.pessoas p on p.id = n.pessoa_id
 --  where n.funil = 'compra' and n.etapa = 'Novo' and n.fechado_em is null
 --    and n.primeiro_contato_em is null
---    and (n.origem_evento = 'trava:submit' or n.origem_rotulo like 'trava%');
+--    and (n.origem_evento = 'trava:submit' or n.origem_rotulo like 'trava%'
+--         or n.origem_rotulo = 'Formulário - conteudo-acesso')
+--    and not exists (select 1 from public.atividades a
+--                     where a.negocio_id = n.id and coalesce(a.meta->>'rotulo','') <> ''
+--                       and a.meta->>'rotulo' not like 'trava%'
+--                       and a.meta->>'rotulo' <> 'Formulário - conteudo-acesso');
 --
 -- update public.negocios n set funil = 'analise'
 --  where n.funil = 'compra' and n.etapa = 'Novo' and n.fechado_em is null
 --    and n.primeiro_contato_em is null
---    and (n.origem_evento = 'trava:submit' or n.origem_rotulo like 'trava%');
+--    and (n.origem_evento = 'trava:submit' or n.origem_rotulo like 'trava%'
+--         or n.origem_rotulo = 'Formulário - conteudo-acesso')
+--    and not exists (select 1 from public.atividades a
+--                     where a.negocio_id = n.id and coalesce(a.meta->>'rotulo','') <> ''
+--                       and a.meta->>'rotulo' not like 'trava%'
+--                       and a.meta->>'rotulo' <> 'Formulário - conteudo-acesso');
 -- ---------------------------------------------------------------------

@@ -333,7 +333,9 @@ function modalEtapa(id, funil, etapaAtual, pessoaId) {
     <div class="campo"><label>Etapa</label><select name="etapa">${et.map(e => `<option ${e === etapaAtual ? 'selected' : ''}>${h(e)}</option>`).join('')}</select></div>
     <div class="rodape"><a class="btn" href="#/pessoa/${pessoaId}">Abrir a pessoa</a><button class="btn btn-ouro" type="submit">Salvar</button></div></form>`);
   const sf = f.querySelector('[name=funil]'), se = f.querySelector('[name=etapa]');
-  sf.onchange = () => { se.innerHTML = (funis[sf.value]?.etapas || []).map(e => `<option>${h(e)}</option>`).join(''); };
+  /* trocar o funil mantem a etapa quando ela existe no funil novo — mover um
+     "Em analise / Em contato" para Compra nao pode voltar o cartao a Novo */
+  sf.onchange = () => { const atual = se.value; se.innerHTML = (funis[sf.value]?.etapas || []).map(e => `<option ${e === atual ? 'selected' : ''}>${h(e)}</option>`).join(''); };
   f.querySelector('form').onsubmit = async (e) => { e.preventDefault(); const d = new FormData(e.target); f.remove();
     if (d.get('funil') !== funil) await dados.editarNegocio(id, { funil: d.get('funil') });
     await mover(id, d.get('etapa')); };
@@ -432,7 +434,7 @@ async function telaPessoa(id) {
 function modalNegocio(n, p) {
   const funis = estado.config?.funis || {}; const tipos = estado.config?.tipos || []; const perfis = estado.perfisLista || [];
   const f = modal(`<h2>${n ? 'Editar negócio' : 'Novo negócio'}</h2><form id="fneg">
-    <div class="campo"><label>Funil</label><select name="funil">${ordenarFunis(Object.keys(funis)).map(k => `<option value="${k}" ${n?.funil === k ? 'selected' : ''}>${h(funis[k].rotulo)}</option>`).join('')}</select></div>
+    <div class="campo"><label>Funil</label><select name="funil">${ordenarFunis(Object.keys(funis)).map(k => `<option value="${k}" ${(n ? n.funil === k : k === 'compra') ? 'selected' : ''}>${h(funis[k].rotulo)}</option>`).join('')}</select></div>
     <div class="campo"><label>Tipo</label><select name="tipo"><option value="">—</option>${tipos.map(t => `<option ${n?.tipo === t ? 'selected' : ''}>${h(t)}</option>`).join('')}</select></div>
     <div class="campo"><label>Cidade / região</label><input name="cidade" value="${h(n?.cidade || p.cidade || '')}"></div>
     <div class="campo"><label>Área (ha)</label><input name="area_ha" type="number" step="0.1" value="${n?.area_ha ?? ''}"></div>
@@ -443,6 +445,9 @@ function modalNegocio(n, p) {
     <div class="rodape"><button class="btn" type="button" data-fechar>Cancelar</button><button class="btn btn-ouro" type="submit">Salvar</button></div></form>`);
   f.querySelector('[data-fechar]').onclick = () => f.remove();
   f.querySelector('form').onsubmit = async (e) => { e.preventDefault(); const d = Object.fromEntries(new FormData(e.target)); ['area_ha', 'valor'].forEach(k => { if (k in d) d[k] = d[k] === '' ? null : Number(d[k]); }); if (!d.corretor_id) d.corretor_id = null;
+    /* funil novo sem a etapa atual (ex.: Compra/Proposta para Em analise): o
+       cartao sumiria do pipeline, que so desenha as etapas do proprio funil */
+    if (n && d.funil && d.funil !== n.funil && !(funis[d.funil]?.etapas || []).includes(n.etapa)) d.etapa = n.primeiro_contato_em ? 'Em contato' : 'Novo';
     if (n) await dados.editarNegocio(n.id, d); else await dados.criarNegocio({ ...d, pessoa_id: p.id, etapa: 'Novo', origem_evento: 'console', origem_rotulo: 'Criado no console' });
     f.remove(); toast('Salvo'); render(); };
 }
