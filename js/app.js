@@ -477,48 +477,158 @@ async function telaOrigens() {
 }
 
 /* ------------------------------------------------------------ IA lendo o site */
-// Dados da Edge Function do site (netlify/edge-functions/agentes.js) -> 008_ai_visibility.sql.
+// Dados da Edge Function do site (netlify/edge-functions/agentes.js) -> 008 a 012 em supabase/.
 // Robô não roda JavaScript: nada disto aparece no GA4 nem em Origens.
-const FIN_ROT = { leitura_ia: ['Leitura ao vivo', 'c-ouro'], agente_ia: ['Agente de IA', 'c-ouro'], busca_ia: ['Índice de IA', 'c-laranja'], treino: ['Treino', 'c-neutro'], busca: ['Buscador', 'c-verde'], previa: ['Prévia de link', 'c-azul'], seo: ['SEO', 'c-neutro'], monitor: ['Monitor', 'c-neutro'], script: ['Script', 'c-vermelho'], bot_desconhecido: ['Desconhecido', 'c-vermelho'] };
+// v2 (17/10/2026): agrupado por empresa com logo oficial, desistências (499) e varredura
+// separadas dos 404 reais, cada problema com a solução ao lado, e botão que gera a regra
+// de um robô sem nome pronta para colar em netlify/lib/agentes.mjs.
+const FIN_ROT = { leitura_ia: ['Leitura ao vivo', 'c-ouro'], agente_ia: ['Agente de IA', 'c-ouro'], busca_ia: ['Índice de IA', 'c-laranja'], treino: ['Treino', 'c-neutro'], busca: ['Buscador', 'c-verde'], previa: ['Prévia de link', 'c-azul'], seo: ['SEO e prospecção', 'c-neutro'], monitor: ['Monitor', 'c-neutro'], script: ['Script ou scanner', 'c-vermelho'], bot_desconhecido: ['Desconhecido', 'c-vermelho'] };
 const chipFin = (f) => { const m = FIN_ROT[f] || [f, 'c-neutro']; return `<span class="chip ${m[1]}">${h(m[0])}</span>`; };
+// Empresa -> [arquivo do logo em /logos (null = monograma), o que ela faz com o site].
+// Logos: arquivos oficiais (Simple Icons e Wikimedia Commons), nunca desenho aproximado — ver logos/FONTES.md.
+const EMPRESAS = {
+  OpenAI: ['openai', 'ChatGPT'], Anthropic: ['anthropic', 'Claude'], Perplexity: ['perplexity', 'Perplexity'], Google: ['google', 'Busca, Gemini e Visão geral de IA'],
+  Microsoft: ['bing', 'Bing e Copilot'], Apple: ['apple', 'Siri e Apple Intelligence'], Meta: ['meta', 'Meta AI, WhatsApp e Facebook'], Mistral: ['mistralai', 'Le Chat'],
+  DuckDuckGo: ['duckduckgo', 'DuckDuckGo e Duck.ai'], DeepSeek: ['deepseek', 'DeepSeek'], xAI: ['xai', 'Grok'], Exa: [null, 'índice que alimenta apps de IA'],
+  Parallel: [null, 'APIs web para agentes de IA'], Sofya: [null, 'busca para agentes de IA'], 'Reflection AI': [null, 'treino de modelo'], Brave: ['brave', 'Brave Search'],
+  Yandex: ['yandex', 'buscador russo'], Baidu: ['baidu', 'buscador chinês'], ByteDance: ['bytedance', 'TikTok'], Amazon: ['amazon', 'Alexa'], 'Common Crawl': [null, 'base aberta usada em treino'],
+  Cohere: [null, 'treino de modelo'], 'Allen Institute': [null, 'pesquisa em IA'], Diffbot: [null, 'extração para IAs'], Huawei: ['huawei', 'Petal Search'], 'You.com': [null, 'busca com IA'],
+  Semrush: ['semrush', 'ferramenta de SEO'], Ahrefs: ['ahrefs', 'ferramenta de SEO'], Majestic: [null, 'ferramenta de SEO'], Moz: [null, 'ferramenta de SEO'], 'SE Ranking': [null, 'ferramenta de SEO'],
+  DataForSEO: [null, 'ferramenta de SEO'], Serpstat: [null, 'ferramenta de SEO'], Kenlo: [null, 'software para imobiliárias: a Agrotec está na lista de prospecção deles'],
+  webXtrend: [null, 'dados de domínios'], Xcub: [null, 'pesquisa de mercado'], LeakIX: [null, 'scanner de segurança'], Censys: [null, 'scanner de segurança'], Modat: [null, 'scanner de segurança'],
+  'Recorded Future': [null, 'scanner de segurança'], OpenINTEL: [null, 'medição acadêmica'], Telegram: ['telegram', 'prévia de link'], X: ['x', 'prévia de link'], LinkedIn: ['linkedin', 'prévia de link'],
+  Slack: [null, 'prévia de link'], Discord: ['discord', 'prévia de link'], Pinterest: ['pinterest', 'prévia de link'], Reddit: ['reddit', 'prévia de link'], Naver: ['naver', 'buscador coreano'],
+  Qwant: ['qwant', 'buscador francês'], Mojeek: ['mojeek', 'buscador'], Seznam: [null, 'buscador tcheco'], Yahoo: [null, 'buscador'], 'Internet Archive': [null, 'arquivo da web'], Timpi: [null, 'índice descentralizado'],
+  ImageSift: [null, 'coleta de imagens'], 'Webz.io': [null, 'coleta de dados'], 'Screaming Frog': [null, 'auditoria de SEO'], GTmetrix: [null, 'teste de velocidade'], WebMeUp: [null, 'ferramenta de SEO'], Babbar: [null, 'ferramenta de SEO']
+};
+// Logo por robô quando o nome do robô diz mais que a empresa (Gemini, WhatsApp, TikTok...).
+const LOGO_AGENTE = [[/Gemini/, 'googlegemini'], [/WhatsApp/, 'whatsapp'], [/Facebook/, 'facebook'], [/TikTok/, 'tiktok'], [/Bing/i, 'bing'], [/Google|Lighthouse/, 'google'], [/ChatGPT|OAI-|GPTBot/, 'openai'], [/Claude/, 'anthropic']];
+// Sem o 012 o banco não traz a empresa: inferir pelo nome do robô (só até o 012 ser aplicado).
+const EMPRESA_POR_NOME = [[/ChatGPT|OAI-|GPTBot/, 'OpenAI'], [/Claude/, 'Anthropic'], [/Perplexity/, 'Perplexity'], [/Google|Gemini|Lighthouse|Storebot|AdsBot|FeedFetcher/, 'Google'], [/Bing|msnbot/i, 'Microsoft'], [/Applebot/, 'Apple'], [/Meta-|Facebook|WhatsApp/, 'Meta'], [/Mistral/, 'Mistral'], [/Duck/, 'DuckDuckGo'], [/Exa/, 'Exa'], [/Bytespider|TikTok/, 'ByteDance'], [/Amazon/, 'Amazon'], [/CCBot/, 'Common Crawl'], [/Ahrefs/, 'Ahrefs'], [/Semrush/, 'Semrush'], [/Yandex/, 'Yandex'], [/Baidu/, 'Baidu'], [/Telegram/, 'Telegram'], [/LinkedIn/, 'LinkedIn'], [/Kenlo/, 'Kenlo'], [/xcub/, 'Xcub'], [/MJ12/, 'Majestic'], [/serpstat/, 'Serpstat'], [/DotBot|rogerbot/, 'Moz'], [/PetalBot|PanguBot/, 'Huawei']];
+const empresaDe = (a) => a.empresa || (EMPRESA_POR_NOME.find(([re]) => re.test(a.agente || '')) || [])[1] || a.agente;
+function logo(empresa, agente = '', tam = 'g') {
+  const porAgente = (LOGO_AGENTE.find(([re]) => re.test(agente)) || [])[1];
+  const meta = EMPRESAS[empresa] || [null, ''];
+  const arq = porAgente || meta[0];
+  const nome = empresa || agente || '?';
+  if (arq) return `<span class="logo logo-${tam}" title="${h(nome)}"><img src="/logos/${arq}.svg" alt="" loading="lazy"></span>`;
+  const mono = nome.replace(/[^A-Za-z0-9 ]/g, '').split(/\s+/).map(p => p[0] || '').join('').slice(0, 2).toUpperCase() || '?';
+  return `<span class="logo logo-${tam} logo-mono" title="${h(nome)}">${h(mono)}</span>`;
+}
+const pct = (a, b) => b ? Math.round(100 * a / b) + '%' : '—';
+const nz = (v) => Number(v) || 0;
+// O que fazer com um endereço que a IA pediu e não existe. Reconhece o que o site já corrigiu
+// no branch de 17/10/2026 (pastas por estado, variantes de sitemap) e sugere o resto.
+function solucaoErro(e) {
+  const c = e.caminho || '';
+  const estado = (sig, nome) => ({ r: ['rs', 'rio-grande-do-sul'].includes(sig) ? `${nome}-rio-grande-do-sul` : ['sc', 'santa-catarina'].includes(sig) || c.startsWith(`/${nome}/sc/`) ? `${nome}-santa-catarina` : ['pr', 'parana'].includes(sig) ? `${nome}-parana` : nome });
+  let m;
+  if (nz(e.status) >= 500) return { tipo: 'servidor', txt: `Erro nosso (HTTP ${e.status}), não da IA. Se repetir, olhar o Netlify.` };
+  if ((m = /^\/(preco-da-terra|tabela-vtn)\/([a-z-]+)/.exec(c))) { const alvo = estado(m[2], m[1]).r; return { tipo: 'redirect', txt: `A IA adivinhou uma pasta por estado que o site não tem. 301 para /${alvo} já escrito em _redirects (17/10/2026); quando publicado, o palpite vira visita.` }; }
+  if (/^\/sitemap/.test(c)) return { tipo: 'redirect', txt: `Variante de sitemap que o Bing tenta. 301 para /sitemap.xml já escrito em _redirects (17/10/2026).` };
+  if ((m = /^\/(tabela-vtn|preco-da-terra|fazendas|sitios|chacaras|imoveis-rurais)-([a-z-]+)$/.exec(c))) return { tipo: 'conteudo', txt: `A IA procurou "${m[1]}" de ${m[2].replace(/-/g, ' ')} e o site não tem essa página. Se a pergunta se repetir, é demanda real por uma página nova; se for pontual, deixar o 404.` };
+  return { tipo: 'avaliar', txt: 'Conferir se a página existiu um dia (então 301 em _redirects) ou se é palpite da IA (então avaliar criar).' };
+}
 async function telaIA() {
   const d = await dados.ia();
   if (d.faltaSql) {
-    moldura('ia', `${topo('IA lendo o site', 'Robôs e agentes de IA que abrem as páginas')}<div class="cx"><h2>Falta ligar o banco</h2><p style="color:var(--tinta-2)">Rode <span class="mono">supabase/008_ai_visibility.sql</span> no SQL Editor do Supabase e ponha <span class="mono">AGENTES_GRAVAR=1</span> nas variáveis do Netlify do site. Enquanto isso a detecção funciona só no log da Edge Function.</p><p style="font-size:12px;color:var(--tinta-3)">${h(d.erro || '')}</p></div>`);
+    moldura('ia', `${topo('IA lendo o site', 'Robôs e agentes de IA que abrem as páginas')}<div class="cx"><h2>Falta ligar o banco</h2><p style="color:var(--tinta-2)">Rode <span class="mono">supabase/008_ai_visibility.sql</span> (e os seguintes até o 012) no SQL Editor do Supabase e ponha <span class="mono">AGENTES_GRAVAR=1</span> nas variáveis do Netlify do site. Enquanto isso a detecção funciona só no log da Edge Function.</p><p style="font-size:12px;color:var(--tinta-3)">${h(d.erro || '')}</p></div>`);
     return ligarTopo();
   }
-  // Totais contados uma vez (v_ia_totais, 009). A soma das páginas conta em dobro quem viu várias páginas.
   const T = d.totais || {};
-  const soma = (k) => T[k] != null ? Number(T[k]) : d.paginas.reduce((a, p) => a + (Number(p[k]) || 0), 0);
-  const falsos = T.falsos != null ? Number(T.falsos) : d.agentes.reduce((a, x) => a + (Number(x.falsos) || 0), 0);
+  const soma = (k) => T[k] != null ? Number(T[k]) : d.paginas.reduce((a, p) => a + nz(p[k]), 0);
+  const falsos = T.falsos != null ? Number(T.falsos) : d.agentes.reduce((a, x) => a + nz(x.falsos), 0);
+  const abandonos = T.abandonos != null ? Number(T.abandonos) : (d.abandonos || []).reduce((a, x) => a + nz(x.abandonos), 0);
+  const varredura = nz(T.varredura);
   const diasMedindo = T.medindo_desde ? Math.floor((Date.now() - new Date(T.medindo_desde + 'T12:00:00')) / 86400000) : 0;
-  const lidas = d.paginas.filter(p => p.leituras_ao_vivo > 0 || p.visitantes_vindos_de_ia > 0);
-  // Só depois de 7 dias medindo: antes disso toda página nova cai aqui e vira ruído.
-  const nunca = diasMedindo >= 7 ? d.paginas.filter(p => !p.leituras_ao_vivo && !p.indice_ia && p.buscadores > 0) : [];
-  const maxL = Math.max(1, ...lidas.map(p => p.leituras_ao_vivo));
-  const cab = (cols) => `<div class="funil-ev" style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--tinta-3)">${cols.map(c => `<div>${c}</div>`).join('')}</div>`;
-  moldura('ia', `${topo('IA lendo o site', 'Quem é máquina, o que leu e o que isso virou · 28 dias' + (T.medindo_desde ? ` · robôs medidos desde ${fmtDia(T.medindo_desde)}` : ''))}
+  const lidas = d.paginas.filter(p => nz(p.leituras_ao_vivo) > 0 || nz(p.visitantes_vindos_de_ia) > 0);
+  const nunca = diasMedindo >= 7 ? d.paginas.filter(p => !nz(p.leituras_ao_vivo) && !nz(p.indice_ia) && nz(p.buscadores) > 0) : [];
+  const maxL = Math.max(1, ...lidas.map(p => nz(p.leituras_ao_vivo)));
+  const cab = (cols, cls = 'funil-ev') => `<div class="${cls} cab-tab">${cols.map(c => `<div>${c}</div>`).join('')}</div>`;
+
+  // --- empresas: do 012 (v_ia_empresas) ou agrupadas aqui a partir de v_ia_agentes
+  let empresas = d.empresas;
+  if (!empresas) {
+    const m = {};
+    d.agentes.filter(a => a.finalidade !== 'bot_desconhecido').forEach(a => { const e = empresaDe(a); const x = m[e] = m[e] || { empresa: e, total_28d: 0, leituras_ao_vivo: 0, indice_ia: 0, treino: 0, busca: 0, previa: 0, ferramentas: 0, abandonos: 0, verificados: 0, nao_verificaveis: 0, agentes: [], ultimo_dia: null };
+      const n = nz(a.total_28d) - nz(a.falsos); x.total_28d += n; x.verificados += nz(a.verificados); x.abandonos += nz(a.abandonos); x.agentes.push(a.agente); if (!x.ultimo_dia || a.ultimo_dia > x.ultimo_dia) x.ultimo_dia = a.ultimo_dia;
+      const k = { leitura_ia: 'leituras_ao_vivo', agente_ia: 'leituras_ao_vivo', busca_ia: 'indice_ia', treino: 'treino', busca: 'busca', previa: 'previa' }[a.finalidade] || 'ferramentas'; x[k] += n; if (a.verificados == null) x.nao_verificaveis += n; });
+    empresas = Object.values(m).map(x => ({ ...x, agentes: x.agentes.join(', ') })).sort((a, b) => b.total_28d - a.total_28d);
+  }
+  const respondem = empresas.filter(e => nz(e.leituras_ao_vivo) + nz(e.indice_ia) > 0);
+  const buscam = empresas.filter(e => !respondem.includes(e) && nz(e.busca) + nz(e.previa) > 0);
+  const resto = empresas.filter(e => !respondem.includes(e) && !buscam.includes(e));
+  const cardEmpresa = (e) => {
+    const partes = [['ao vivo', e.leituras_ao_vivo, 'c-ouro'], ['índice', e.indice_ia, 'c-laranja'], ['treino', e.treino, 'c-neutro'], ['busca', e.busca, 'c-verde'], ['prévias', e.previa, 'c-azul'], ['ferramentas', e.ferramentas, 'c-neutro']].filter(x => nz(x[1]) > 0);
+    const conf = nz(e.verificados) ? `IP conferido em ${pct(nz(e.verificados), nz(e.total_28d))}` : 'sem lista pública de IPs';
+    const meta = EMPRESAS[e.empresa] || [null, ''];
+    return `<div class="emp"><div class="emp-cab">${logo(e.empresa, (e.agentes || '').split(',')[0])}<div class="emp-nome"><b>${h(e.empresa)}</b><small>${h(meta[1] || e.agentes || '')}</small></div><b class="num emp-n">${nz(e.total_28d)}</b></div>
+      <div class="emp-chips">${partes.map(x => `<span class="chip ${x[2]}">${nz(x[1])} ${x[0]}</span>`).join('')}${nz(e.abandonos) ? `<span class="chip c-vermelho">${nz(e.abandonos)} desistiu</span>` : ''}</div>
+      <div class="emp-pe"><span>${h(conf)}</span><span>${e.ultimo_dia ? 'visto ' + fmtDia(e.ultimo_dia) : ''}</span></div>
+      <div class="emp-robos">${h(e.agentes || '')}</div></div>`;
+  };
+
+  // --- quem abriu cada página (logos empilhados)
+  const quem = {}; (d.paginaAgentes || []).forEach(x => (quem[x.caminho] = quem[x.caminho] || []).push(x));
+  const logosPag = (c) => (quem[c] || []).slice(0, 4).map(x => logo(x.empresa || empresaDe(x), x.agente, 'p')).join('');
+  const abandPag = {}; (d.abandonos || []).forEach(x => abandPag[x.caminho] = (abandPag[x.caminho] || 0) + nz(x.abandonos));
+
+  // --- série: leituras ao vivo por dia
+  const serieDia = {}; (d.serie || []).filter(x => ['leitura_ia', 'agente_ia'].includes(x.finalidade)).forEach(x => serieDia[x.dia] = (serieDia[x.dia] || 0) + nz(x.n));
+  const dias = Object.keys(serieDia).sort();
+
+  // --- problemas
+  const erros = (d.erros || []).map(e => ({ ...e, sol: solucaoErro(e) }));
+  const home = (d.abandonos || []).find(x => x.caminho === '/');
+  const grupos = (d.falsosGrupos || []).filter(g => nz(g.n) >= 2);
+
+  moldura('ia', `${topo('IA lendo o site', 'Quem é máquina, o que leu, o que isso virou e o que corrigir · 28 dias' + (T.medindo_desde ? ` · medido desde ${fmtDia(T.medindo_desde)}` : ''))}
+    ${d.v2 ? '' : `<div class="aviso-sql">Falta rodar <span class="mono">supabase/012_ai_visibility_v2.sql</span>: até lá as empresas são inferidas pelo nome do robô, as desistências (499) contam como erro e os robôs novos (Exa, Kenlo, scanners) continuam em "desconhecido".</div>`}
     <div class="kpis">
-      <div class="kpi"><div class="cab">${ICO.ia}</div><b class="num">${soma('leituras_ao_vivo')}</b><span>leituras ao vivo · alguém perguntou à IA e ela abriu a página</span></div>
-      <div class="kpi"><div class="cab">${ICO.busca}</div><b class="num">${soma('indice_ia')}</b><span>acessos de índice de IA</span></div>
+      <div class="kpi"><div class="cab">${ICO.ia}</div><b class="num ouro">${soma('leituras_ao_vivo')}</b><span>leituras ao vivo · alguém perguntou à IA e ela abriu a página</span></div>
+      <div class="kpi"><div class="cab">${ICO.busca}</div><b class="num">${soma('indice_ia')}</b><span>acessos de índice de IA · o que ela guarda para responder depois</span></div>
       <div class="kpi"><div class="cab">${ICO.pessoas}</div><b class="num">${soma('visitantes_vindos_de_ia')}</b><span>pessoas que chegaram vindas de IA · ${soma('leads_vindos_de_ia')} se identificaram${d.totais ? '' : ' · falta rodar o 009 (conta em dobro)'}</span></div>
-      <div class="kpi"><div class="cab">${ICO.cadeado}</div><b class="num">${falsos}</b><span>acessos com nome de robô e IP falso · fora das contas</span></div>
+      <div class="kpi"><div class="cab">${ICO.nota}</div><b class="num ${abandonos ? 'vermelho' : ''}">${abandonos}</b><span>leituras que a IA começou e desistiu · fechou antes da resposta</span></div>
+      <div class="kpi"><div class="cab">${ICO.cadeado}</div><b class="num">${falsos + varredura}</b><span>fora das contas · ${falsos} com nome de robô e IP falso${varredura ? ` · ${varredura} de varredura` : ''}</span></div>
     </div>
-    <div class="cx" style="margin-bottom:14px"><h2>Páginas que a IA abriu para responder alguém</h2><div class="sub">Leitura ao vivo → gente que chegou vinda de IA → lead. A última ponta já existia em Origens; aqui ela encontra a leitura.</div>
-      ${cab(['Página', 'Ao vivo', 'Índice IA', 'Pessoas via IA', 'Identificadas', ''])}
-      ${lidas.map(p => `<div class="funil-ev"><div>${linkPag(p.caminho)}</div><div class="n num">${p.leituras_ao_vivo}</div><div class="n num">${p.indice_ia}</div><div class="n num">${p.visitantes_vindos_de_ia}</div><div class="n num">${p.leads_vindos_de_ia}</div><div class="barra"><i style="width:${Math.round(100 * p.leituras_ao_vivo / maxL)}%"></i></div></div>`).join('') || '<p class="vazio">Nenhuma leitura ao vivo nos últimos 28 dias.</p>'}</div>
-    ${(d.protocolo || []).length ? `<div class="cx" style="margin-bottom:14px"><h2>Consultas de permissão</h2><div class="sub">Antes de ler, o robô consulta o <span class="mono">robots.txt</span> para saber se pode, e o <span class="mono">sitemap.xml</span>/<span class="mono">llms.txt</span> para saber o que existe. Não é leitura de conteúdo, por isso fica fora da tabela acima.</div>
+    ${dias.length > 2 ? `<div class="cx" style="margin-bottom:14px"><h2>Leituras ao vivo por dia</h2><div class="sub">Cada ponto é uma IA abrindo uma página porque uma pessoa perguntou algo naquele momento. É o indicador principal; o resto é contexto.</div>
+      <div style="position:relative;margin-top:14px"><canvas class="grafico" id="g-ia" style="height:200px"></canvas></div></div>` : ''}
+
+    <div class="cx" style="margin-bottom:14px"><h2>Quem está lendo</h2><div class="sub">Por empresa, sem os falsos. "IP conferido" = o endereço bate com a lista que a própria empresa publica. Exa, Parallel e Sofya não publicam lista: são índices que outros apps de IA consultam.</div>
+      <h3 class="sub-h">IAs que respondem pessoas <small>· ${respondem.length}</small></h3><div class="emp-grid">${respondem.map(cardEmpresa).join('') || '<p class="vazio">Nenhuma ainda.</p>'}</div>
+      ${buscam.length ? `<h3 class="sub-h">Buscadores e prévias de link <small>· ${buscam.length}</small></h3><div class="emp-grid">${buscam.map(cardEmpresa).join('')}</div>` : ''}
+      ${resto.length ? `<details class="dobra"><summary>Treino de modelo, SEO, prospecção e scanners <small>· ${resto.length} empresas · ${resto.reduce((a, e) => a + nz(e.total_28d), 0)} acessos</small></summary><div class="emp-grid">${resto.map(cardEmpresa).join('')}</div></details>` : ''}</div>
+
+    <div class="cx" style="margin-bottom:14px"><h2>Páginas que a IA abriu para responder alguém</h2><div class="sub">Leitura ao vivo → gente que chegou vinda de IA → lead. A última ponta já existia em Origens; aqui ela encontra a leitura. Quando a IA lê muito e ninguém chega, o texto que ela copia não está trazendo a pessoa: o contato precisa estar dentro da resposta citável.</div>
+      ${cab(['Página', 'Ao vivo', 'Quem', 'Índice IA', 'Pessoas via IA', 'Identificadas'], 'pag-ia')}
+      ${lidas.map(p => `<div class="pag-ia"><div>${linkPag(p.caminho)}${abandPag[p.caminho] ? ` <span class="chip c-vermelho" title="A IA fechou a conexão antes da resposta">${abandPag[p.caminho]} desistiu</span>` : ''}</div><div class="n num">${nz(p.leituras_ao_vivo)}</div><div class="logos">${logosPag(p.caminho)}</div><div class="n num">${nz(p.indice_ia)}</div><div class="n num">${nz(p.visitantes_vindos_de_ia)}</div><div class="n num">${nz(p.leads_vindos_de_ia)}</div><div class="barra" style="grid-column:1/-1"><i style="width:${Math.round(100 * nz(p.leituras_ao_vivo) / maxL)}%"></i></div></div>`).join('') || '<p class="vazio">Nenhuma leitura ao vivo nos últimos 28 dias.</p>'}</div>
+
+    <div class="cx" style="margin-bottom:14px"><h2>Problemas e o que fazer</h2><div class="sub">Cada linha é um defeito medido e a solução ao lado. O que já foi corrigido no código aparece como tal; o resto é decisão.</div>
+      ${home ? `<div class="prob prob-alta"><div class="prob-t"><b>A home é a página que a IA mais abre e a que ela mais abandona</b><span class="chip c-vermelho">${nz(home.abandonos)} de ${nz(home.abandonos) + nz(home.completas)} · ${pct(nz(home.abandonos), nz(home.abandonos) + nz(home.completas))}</span></div>
+        <p>O ChatGPT-User abre a home para responder "quem é a Agrotec" e, em ${pct(nz(home.abandonos), nz(home.abandonos) + nz(home.completas))} das vezes, fecha a conexão antes de receber a página (HTTP 499). Medido em 17/10/2026: a home tem 307 KB, dos quais 137 KB de CSS e cabeçalho antes do <span class="mono">&lt;body&gt;</span>; o H1 só aparece no byte 145 mil. Um robô que lê os primeiros 100 KB vê só estilo.</p>
+        <p><b>Solução:</b> tirar o CSS da home para um arquivo externo com cache longo e deixar o texto nos primeiros 30 KB. É mudança de home (risco médio): precisa do seu ok antes de entrar no gerador. Esta linha some sozinha quando as desistências caírem.</p></div>` : ''}
+      ${erros.length ? `<div class="prob"><div class="prob-t"><b>Endereços que a IA pediu e não existem</b><span class="chip c-neutro">${erros.length}</span></div>
+        ${erros.map(e => `<div class="err"><div><span class="mono">${h(e.caminho)}</span> <small>${e.status ? 'HTTP ' + h(e.status) + ' · ' : ''}${h(e.agentes)} · ${nz(e.n)}×${e.ultimo_em ? ' · ' + relativo(e.ultimo_em) : ''}</small></div><div class="err-sol ${e.sol.tipo === 'redirect' ? 'ok' : ''}">${h(e.sol.txt)}</div></div>`).join('')}</div>` : '<div class="prob"><div class="prob-t"><b>Endereços que a IA pediu e não existem</b><span class="chip c-verde">nenhum</span></div></div>'}
+      ${varredura ? `<div class="prob"><div class="prob-t"><b>Varredura de vulnerabilidade</b><span class="chip c-neutro">${varredura} acessos</span></div><p>Pedidos a <span class="mono">/.env</span>, <span class="mono">/.git/HEAD</span>, <span class="mono">/wp-login.php</span> e parecidos, muitas vezes com nome de robô famoso e IP falso. O site não tem nada disso (é estático), responde 404 e o acesso vai para um balde só. Nada a fazer.</p></div>` : ''}
+      ${nunca.length ? `<div class="prob"><div class="prob-t"><b>Buscador leu, IA nunca</b><span class="chip c-neutro">${nunca.length} páginas</span></div><p>Um buscador conhece, nenhuma IA abriu em 28 dias. Olhar primeiro parágrafo, links internos e FAQ.</p><div class="lista-pag">${nunca.slice(0, 15).map(p => `<span>${linkPag(p.caminho)} <small class="num">${nz(p.buscadores)}</small></span>`).join('')}</div></div>` : ''}</div>
+
+    ${grupos.length ? `<div class="cx" style="margin-bottom:14px"><h2>Fora das contas: quem finge ser robô</h2><div class="sub">Agrupado por dia e rede. Um ator que usa vários nomes num dia só está testando o que o site deixa passar, não respondendo ninguém.</div>
+      ${cab(['Dia', 'Rede · país', 'Acessos', 'Nomes usados', ''], 'falso-ev')}
+      ${grupos.slice(0, 12).map(g => `<div class="falso-ev"><div>${fmtDia(g.dia)}</div><div class="mono">${h(g.ip_rede || '')} · ${h(g.pais || '')}</div><div class="n num">${nz(g.n)}</div><div>${nz(g.nomes)}</div><div class="agentes-txt">${h(g.agentes)}${g.varredura ? ' · varredura' : ''}</div></div>`).join('')}</div>` : ''}
+
+    <div class="cx" style="margin-bottom:14px"><h2>Robôs sem regra</h2><div class="sub">Parecem robô e o site ainda não sabe quem são. O botão copia a regra pronta para <span class="mono">netlify/lib/agentes.mjs</span>: cole, ajuste empresa e finalidade, e rode <span class="mono">node ferramentas/testar_agentes.mjs</span>.</div>
+      ${(d.desconhecidos || []).map(x => { const nome = (/([A-Za-z][A-Za-z0-9_-]*(?:[Bb]ot|[Cc]rawler|[Ss]pider|[Aa]gent|[Ff]etcher|[Ss]canner))/.exec(x.ua_exemplo || '') || [])[1] || 'NovoRobo'; const regra = `{ re: /${nome.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/, agente: '${nome}', empresa: '', fin: 'bot_desconhecido', ex: '${String(x.ua_exemplo || '').replace(/'/g, "\\'")}' },`;
+        return `<div class="desc"><div class="mono" style="word-break:break-all">${h(x.ua_exemplo)}</div><div class="desc-pe"><span class="num">${nz(x.n)} acessos${x.paginas ? ` · ${nz(x.paginas)} páginas` : ''}${x.paises ? ` · ${h(x.paises)}` : ''} · ${relativo(x.ultimo_em)}</span><button class="btn btn-p" data-regra="${h(regra)}">${ICO.copiar} Copiar regra</button></div></div>`; }).join('') || '<p class="vazio">Nenhum. Todo robô visto nos últimos 28 dias tem regra.</p>'}</div>
+
+    ${(d.protocolo || []).length ? `<details class="cx dobra" style="margin-bottom:14px"><summary><h2 style="display:inline">Consultas de permissão</h2> <small>· robots.txt, llms.txt e sitemap.xml · ${d.protocolo.length} linhas</small></summary><div class="sub">Antes de ler, o robô consulta o <span class="mono">robots.txt</span> para saber se pode, e o <span class="mono">sitemap.xml</span>/<span class="mono">llms.txt</span> para saber o que existe. Não é leitura de conteúdo, por isso fica fora das contas.</div>
       ${cab(['Arquivo', 'Robô', 'Vezes', 'Tipo', '', ''])}
-      ${d.protocolo.map(x => `<div class="funil-ev"><div class="mono">${h(x.caminho)}</div><div><b>${h(x.agente)}</b></div><div class="n num">${x.n}</div><div>${chipFin(x.finalidade)}</div><div></div><div></div></div>`).join('')}</div>` : ''}
-    <div class="cx" style="margin-bottom:14px"><h2>Endereços que robô pediu e não existem</h2><div class="sub">Cada linha é uma IA ou buscador tentando usar um link nosso que dá erro. Candidato a redirect em <span class="mono">_redirects</span>.</div>
-      ${d.erros.map(e => `<div class="funil-ev"><div class="mono">${h(e.caminho)}</div><div class="n num">${e.n}</div><div style="grid-column:1/-1;color:var(--tinta-3);font-size:13px">${h(e.agentes)}</div></div>`).join('') || '<p class="vazio">Nenhum. Bom sinal.</p>'}</div>
-    <div class="cx" style="margin-bottom:14px"><h2>Quem leu</h2><div class="sub">Verificado = o IP confere com a lista publicada pela própria empresa.</div>
-      ${cab(['Robô', '28 dias', 'Verificados', 'Falsos', 'Tipo', ''])}
-      ${d.agentes.map(a => `<div class="funil-ev"><div><b>${h(a.agente)}</b></div><div class="n num">${a.total_28d}</div><div class="n num">${a.verificados ?? '—'}</div><div class="n num">${a.falsos ?? '—'}</div><div>${chipFin(a.finalidade)}</div><div></div></div>`).join('') || '<p class="vazio">Sem acessos registrados ainda.</p>'}</div>
-    ${nunca.length ? `<div class="cx" style="margin-bottom:14px"><h2>Buscador leu, IA nunca</h2><div class="sub">Um buscador conhece, nenhuma IA abriu em 28 dias. Olhar primeiro parágrafo, links internos e FAQ.</div>${nunca.slice(0, 15).map(p => `<div class="funil-ev"><div>${linkPag(p.caminho)}</div><div class="n num">${p.buscadores}</div><div style="grid-column:1/-1"></div></div>`).join('')}</div>` : ''}
-    <div class="cx"><h2>Robôs sem regra</h2><div class="sub">Parecem robô e o site ainda não sabe quem são. Se for de IA, vira regra em <span class="mono">netlify/lib/agentes.mjs</span>.</div>
-      ${d.desconhecidos.map(x => `<div class="funil-ev"><div class="mono" style="grid-column:1/-1;font-size:12px;word-break:break-all">${h(x.ua_exemplo)}</div><div class="n num">${x.n}</div><div style="color:var(--tinta-3);font-size:12px">${relativo(x.ultimo_em)}</div></div>`).join('') || '<p class="vazio">Nenhum.</p>'}</div>`);
+      ${d.protocolo.map(x => `<div class="funil-ev"><div class="mono">${h(x.caminho)}</div><div><b>${h(x.agente)}</b></div><div class="n num">${nz(x.n)}</div><div>${chipFin(x.finalidade)}</div><div></div><div></div></div>`).join('')}</details>` : ''}`);
   ligarTopo();
+  document.querySelectorAll('[data-regra]').forEach(b => b.onclick = () => copiar(b.dataset.regra));
+  if (dias.length > 2) {
+    const desenha = () => { const cv = document.getElementById('g-ia'); if (!cv) { window.onresize = null; return; } linha(cv, { rotulos: dias.map(fmtDia), atual: dias.map(x => serieDia[x]), anterior: null, destaque: [] }); };
+    desenha(); window.onresize = desenha;
+  }
 }
 
 /* ------------------------------------------------------------ relatórios */

@@ -14,6 +14,13 @@ console (este repositório)  →  Supabase (Auth + RLS + Realtime)
 
 - `supabase/001_esquema.sql` — tabelas, views, RLS, gatilhos. Rodar uma vez no SQL Editor.
 - `supabase/002_ingestao.sql` — funções chamadas pelas funções da Netlify com a chave de serviço.
+- `supabase/008` a `012_ai_visibility*.sql` — aba "IA lendo o site": robôs e agentes de IA
+  que a Edge Function do site (`netlify/edge-functions/agentes.js`, regras em
+  `netlify/lib/agentes.mjs`) registra. O 012 (17/10/2026) agrupa por empresa, separa
+  desistências (HTTP 499) e varredura dos 404 reais e reclassifica os robôs que eram
+  "desconhecidos" (Exa, Kenlo, scanners). Rodar na ordem; cada um é idempotente.
+- `logos/` — logos oficiais das empresas que leem o site (fonte de cada arquivo em
+  `logos/FONTES.md`). Empresa sem arquivo oficial aparece como monograma.
 - `config.js` — URL, chave **publishable** (pública por desenho), e-mail fixo do login e tema padrão.
 - `js/dados.js` — camada de dados (Supabase ou demonstração com `?demo=1`).
 - `js/app.js` — telas. `js/graficos.js` — gráficos em canvas.
