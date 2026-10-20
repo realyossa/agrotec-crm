@@ -9,6 +9,11 @@ export const DEMO = new URLSearchParams(location.search).has('demo') || !C.supab
 
 /* ============================================================ Supabase */
 let sb = null;
+// Conexão do 2460 que caiu: os mesmos eventos do conexaoCaiu() do site
+// (netlify/lib/whatsapp.mjs), menos HISTORY_ERROR, que é falha ao trazer a
+// conversa antiga e não queda (não vem "voltou" depois dele).
+const WA_QUEDA = ['PARTNER_REMOVED', 'ACCOUNT_OFFBOARDED', 'ACCOUNT_DELETED', 'DISABLED_UPDATE'];
+const WA_MAX = 500;
 async function cliente() {
   if (sb) return sb;
   const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
@@ -75,6 +80,24 @@ const provSupabase = {
   async apagarParceiro(id) { const s = await cliente(); const { error } = await s.from('parceiros').delete().eq('id', id); if (error) throw error; },
   async atualizarPerfil(id, campos) { const s = await cliente(); const { error } = await s.from('perfis').update(campos).eq('id', id); if (error) throw error; },
   async salvarConfig(chave, valor) { const s = await cliente(); const { error } = await s.from('config').upsert({ chave, valor, atualizado_em: new Date().toISOString() }); if (error) throw error; },
+  // WhatsApp 2460 (013): a conversa inteira da pessoa, mensagem por mensagem,
+  // da mais velha para a mais nova. Só leitura (RLS: perfil ativo). Sem o 013
+  // a tabela não existe: devolve faltaSql e a ficha fica como era.
+  async whatsapp(pessoaId) { const s = await cliente();
+    const { data, error } = await s.from('whatsapp_mensagens').select('wamid, pessoa_id, direcao, canal, formato, conta, texto, midia, responde_a, em')
+      .eq('pessoa_id', pessoaId).order('em', { ascending: false }).limit(WA_MAX);
+    if (error) return { faltaSql: true, erro: error.message, mensagens: [] };
+    let queda = null;
+    try { const { data: cx } = await s.from('whatsapp_conexao').select('evento, em').in('evento', WA_QUEDA.concat('ACCOUNT_RECONNECTED')).order('em', { ascending: false }).limit(1);
+      if (cx && cx[0] && WA_QUEDA.includes(cx[0].evento)) queda = cx[0]; } catch (e) {}
+    return { mensagens: (data || []).reverse(), mais: (data || []).length === WA_MAX, queda }; },
+  // Mensagem nova da pessoa sem recarregar. A RPC grava a mensagem e só depois
+  // põe o pessoa_id (UPDATE na mesma transação), por isso escuta '*' e não só
+  // INSERT. Devolve a função que desliga o canal.
+  aoVivoWhatsapp(pessoaId, cb) { let canal = null, parado = false;
+    cliente().then(s => { if (parado) return; canal = s.channel('wa-' + pessoaId + '-' + Date.now())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_mensagens', filter: 'pessoa_id=eq.' + pessoaId }, (ev) => { if (ev.new && ev.new.wamid) cb(ev.new); }).subscribe(); });
+    return () => { parado = true; if (canal && sb) sb.removeChannel(canal); }; },
   aoVivo(cb) { cliente().then(s => { s.channel('console').on('postgres_changes', { event: '*', schema: 'public', table: 'negocios' }, cb)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'atividades' }, cb)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pessoas' }, cb).subscribe(); }); }
@@ -132,7 +155,41 @@ function demoDados() {
     { id: 'par1', nome: 'João Merkel', tipo: 'corretor', uf: 'SC', cidade: 'Chapecó', telefone: '5549988112233', email: '', observacao: 'Forte no oeste, fazendas de grão', ativo: true, criado_em: iso(dia(20)) },
     { id: 'par2', nome: 'AeroCampo Drones', tipo: 'drone', uf: 'SC', cidade: 'Xanxerê', telefone: '5549977665544', email: 'contato@aerocampo.com.br', observacao: 'Voo em até 48 h na região', ativo: true, criado_em: iso(dia(12)) },
     { id: 'par3', nome: 'Imobiliária Terra Boa', tipo: 'imobiliaria', uf: 'PR', cidade: 'Pato Branco', telefone: '5546991234567', email: '', observacao: '', ativo: true, criado_em: iso(dia(5)) }];
-  return { pessoas, negocios, atividades, eventos, serie, kpis, motores: motoresV, origens, config, perfis, parceiros };
+  // WhatsApp 2460 (013): conversas inventadas para p0, p1 e p2; o telefone é
+  // fictício (5549000000…) e não aparece na tela. p0 tem conversa antiga,
+  // mídia, reação e mensagem apagada; p1 veio pelo site; p2 só tem histórico.
+  const wa = [];
+  const quando = (d, hh, mm) => { if (d === 0) return iso(new Date(Date.now() - (hh * 60 + mm) * 60000)); const x = dia(d); x.setHours(hh, mm, 0, 0); return iso(x); };
+  const NAO_CONTA = ['reaction', 'revoke', 'edit', 'system', 'unsupported'];
+  const msg = (pi, em, direcao, canal, formato, texto = '', midia = null) => wa.push({ wamid: 'wamid.demo' + wa.length, pessoa_id: 'p' + pi, negocio_id: 'n' + pi, telefone: '55490000000' + pi,
+    direcao, canal, formato, conta: !NAO_CONTA.includes(formato), texto, midia, responde_a: null, em });
+  // hoje: (0, h, m) quer dizer "h horas e m minutos atrás", para nunca cair no futuro
+  msg(0, quando(129, 15, 2), 'entrada', 'historico', 'text', 'Boa tarde. Vi o anúncio de vocês no Google. Vocês trabalham com sítio na região de Chapecó?');
+  msg(0, quando(129, 15, 20), 'saida', 'historico', 'text', 'Boa tarde, seu Valdir! Trabalhamos sim. Qual tamanho o senhor procura e pra quê? Moradia, gado, lavoura?');
+  msg(0, quando(129, 15, 31), 'entrada', 'historico', 'text', 'Uns 10 hectares, com água. Quero pôr umas vacas de leite.');
+  msg(0, quando(129, 15, 32), 'entrada', 'historico', 'media_placeholder');
+  msg(0, quando(129, 15, 40), 'saida', 'historico', 'text', 'Entendi. Vou separar o que temos e te mando.');
+  msg(0, quando(129, 15, 41), 'entrada', 'historico', 'reaction', 'Reação');
+  msg(0, quando(1, 18, 47), 'entrada', 'ao_vivo', 'text', 'Bom dia. Voltei a pensar no sítio. Ainda tem coisa por volta de 10 ha perto de Chapecó?');
+  msg(0, quando(1, 18, 49), 'entrada', 'ao_vivo', 'image', 'Essa é a área que eu tenho hoje, pra vender junto', { mime: 'image/jpeg' });
+  msg(0, quando(0, 2, 40), 'saida', 'ao_vivo', 'text', 'Bom dia, seu Valdir! Tem sim. Posso te ligar pra conversar com calma?');
+  msg(0, quando(0, 2, 31), 'entrada', 'ao_vivo', 'audio', '', { mime: 'audio/ogg', voz: true });
+  msg(0, quando(0, 2, 29), 'entrada', 'ao_vivo', 'document', 'Matrícula da minha área', { mime: 'application/pdf', nome: 'matricula-area-atual.pdf' });
+  msg(0, quando(0, 1, 34), 'saida', 'ao_vivo', 'text', 'Recebi. Vou olhar e te ligo daqui a pouco.\nSe der, me manda onde fica.');
+  msg(0, quando(0, 1, 32), 'entrada', 'ao_vivo', 'revoke');
+  msg(0, quando(0, 1, 26), 'entrada', 'ao_vivo', 'location', 'Localização · Linha São Roque, interior');
+  msg(1, quando(3, 10, 5), 'entrada', 'ao_vivo', 'text', 'Vim pelo site da Agrotec. Tenho uma chácara de uns 4 ha em Xaxim e quero vender. Como funciona?');
+  msg(1, quando(3, 10, 22), 'saida', 'ao_vivo', 'text', 'Bom dia, dona Marlene! A gente avalia, faz as fotos e procura comprador sem anunciar o endereço. Posso passar aí essa semana?');
+  msg(1, quando(3, 10, 40), 'entrada', 'ao_vivo', 'image', '', { mime: 'image/jpeg' });
+  msg(1, quando(3, 10, 41), 'entrada', 'ao_vivo', 'image', 'Fundos, com o açude', { mime: 'image/jpeg' });
+  msg(1, quando(2, 8, 15), 'entrada', 'ao_vivo', 'contacts', 'Contato compartilhado: Ivo (meu marido)');
+  msg(2, quando(64, 9, 10), 'entrada', 'historico', 'text', 'Bom dia, vocês fazem arrendamento? Tenho 30 ha de lavoura em Concórdia.');
+  msg(2, quando(64, 9, 52), 'saida', 'historico', 'text', 'Bom dia! Fazemos sim. Me manda o CAR e a matrícula que eu já vejo quem procura na região.');
+  msg(2, quando(64, 11, 3), 'entrada', 'historico', 'sticker', '', { mime: 'image/webp' });
+  msg(2, quando(63, 16, 30), 'entrada', 'historico', 'document', '', { mime: 'application/pdf', nome: 'CAR-propriedade.pdf' });
+  // ?demo=1&queda=1 mostra o aviso de conexão caída
+  const waQueda = new URLSearchParams(location.search).has('queda') ? { evento: 'PARTNER_REMOVED', em: iso(new Date(Date.now() - 40 * 60000)) } : null;
+  return { pessoas, negocios, atividades, eventos, serie, kpis, motores: motoresV, origens, config, perfis, parceiros, wa, waQueda };
 }
 
 const D = DEMO ? demoDados() : null;
@@ -184,6 +241,11 @@ const provDemo = {
   async atividade(a) { const n = D.negocios.find(x => x.id === a.negocio_id); D.atividades.push({ id: 'a' + Math.random(), em: new Date().toISOString(), perfis: D.perfis[2], quem: 'u0', ...a }); if (n && ['ligacao', 'whatsapp', 'visita', 'nota', 'repasse'].includes(a.tipo)) { n.primeiro_contato_em = n.primeiro_contato_em || new Date().toISOString(); n.ultima_atividade_em = new Date().toISOString(); } },
   async atualizarPerfil(id, c) { Object.assign(D.perfis.find(x => x.id === id), c); },
   async salvarConfig(k, v) { D.config[k] = v; },
+  async whatsapp(id) { return espera({ mensagens: D.wa.filter(m => m.pessoa_id === id).sort((a, b) => a.em.localeCompare(b.em)), mais: false, queda: D.waQueda }); },
+  // na demonstração, a ficha do p0 recebe uma mensagem 6 s depois de aberta (uma vez)
+  aoVivoWhatsapp(id, cb) { if (id !== 'p0' || D.waAoVivo) return () => {};
+    const t = setTimeout(() => { D.waAoVivo = true; const m = { wamid: 'wamid.demo.aovivo', pessoa_id: 'p0', negocio_id: 'n0', telefone: '554900000000', direcao: 'entrada', canal: 'ao_vivo', formato: 'text', conta: true, texto: 'Pode ligar sim. Estou na lavoura até as 11h.', midia: null, responde_a: null, em: new Date().toISOString() }; D.wa.push(m); cb(m); }, 6000);
+    return () => clearTimeout(t); },
   aoVivo() {}
 };
 
