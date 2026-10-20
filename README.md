@@ -8,6 +8,7 @@ VENTURES LTD 17063729.
 
 ```
 site (botão com data-ev)  →  site/js/rastro.js  →  /.netlify/functions/evento  →  Supabase: ingerir_eventos()
+WhatsApp 2460 (Meta)      →  /api/whatsapp (functions/whatsapp.mjs do site)  →  Supabase: ingerir_whatsapp()
 popup / formulário / portão →  site/js/captacao.js  →  /.netlify/functions/lead  →  planilha (espelho) + Supabase: ingerir_lead()
 console (este repositório)  →  Supabase (Auth + RLS + Realtime)
 ```
@@ -19,6 +20,11 @@ console (este repositório)  →  Supabase (Auth + RLS + Realtime)
   `netlify/lib/agentes.mjs`) registra. O 012 (17/10/2026) agrupa por empresa, separa
   desistências (HTTP 499) e varredura dos 404 reais e reclassifica os robôs que eram
   "desconhecidos" (Exa, Kenlo, scanners). Rodar na ordem; cada um é idempotente.
+- `supabase/013_whatsapp.sql` (19/10/2026) — WhatsApp do (49) 99838-2460 em coexistência:
+  o webhook do site (`netlify/functions/whatsapp.mjs`) grava cada mensagem em
+  `whatsapp_mensagens`, a agenda do celular em `whatsapp_contatos` e as quedas de
+  conexão em `whatsapp_conexao`; contato novo ganha cartão em "Em análise" com o Jonas
+  de responsável. Só captura, nunca envia. As regras estão no cabeçalho do arquivo.
 - `logos/` — logos oficiais das empresas que leem o site (fonte de cada arquivo em
   `logos/FONTES.md`). Empresa sem arquivo oficial aparece como monograma.
 - `config.js` — URL, chave **publishable** (pública por desenho), e-mail fixo do login e tema padrão.
