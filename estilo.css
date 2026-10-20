@@ -318,3 +318,37 @@ ul.legenda{padding:0;margin:14px 0 0}
   .falso-ev{grid-template-columns:1fr 1fr}
   .falso-ev .agentes-txt{grid-column:1/-1}
 }
+
+/* ------------------------------- conversa do WhatsApp 2460 (ficha, 013) */
+.abas-cx{display:flex;gap:2px;border-bottom:1px solid var(--linha);margin:-8px -20px 12px;padding:0 12px;overflow-x:auto}
+.abas-cx button{display:flex;align-items:center;gap:7px;padding:10px 8px;font-size:15px;font-weight:600;color:var(--tinta-3);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.abas-cx button svg{width:16px;height:16px}
+.abas-cx button[aria-selected="true"]{color:var(--tinta);border-bottom-color:var(--ouro)}
+.abas-cx button[aria-selected="true"] svg{color:var(--verde)}
+.abas-cx small{font-weight:500;font-size:12px;color:var(--tinta-3)}
+.wa-conv{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+.wa-dia{align-self:center;display:flex;gap:6px;align-items:center;margin:12px 0 4px;font-size:12px;font-weight:600;color:var(--tinta-3)}
+.wa-dia>span:first-child{background:var(--papel-2);border:1px solid var(--linha);padding:2px 10px;border-radius:999px}
+.wa-faixa{display:grid;grid-template-columns:16px minmax(0,1fr);gap:8px;font-size:12.5px;color:var(--tinta-3);background:var(--papel-2);border:1px dashed var(--linha-2);border-radius:10px;padding:8px 11px;margin:8px 0 2px}
+.wa-faixa svg{width:14px;height:14px;margin-top:2px}
+.wa-balao{max-width:min(84%,560px);display:flex;flex-direction:column;padding:7px 11px 5px;border-radius:12px;font-size:14.5px;line-height:1.4;overflow-wrap:anywhere}
+.wa-balao.ent{align-self:flex-start;background:var(--papel-2);border:1px solid var(--linha);border-top-left-radius:4px}
+.wa-balao.sai{align-self:flex-end;background:var(--verde-fundo);border:1px solid transparent;border-top-right-radius:4px}
+.wa-balao.antiga{opacity:.8}
+.wa-txt{white-space:pre-wrap}
+.wa-sem{color:var(--tinta-3);font-style:italic}
+.wa-quem{font-size:11px;font-weight:600;color:var(--verde);letter-spacing:.02em}
+.wa-hora{align-self:flex-end;font-size:11px;color:var(--tinta-3);font-variant-numeric:tabular-nums;margin-top:1px}
+.wa-midia{display:flex;align-items:center;gap:7px;min-width:0;font-size:13px;color:var(--tinta-2);background:var(--fundo-2);border-radius:8px;padding:5px 9px;margin:2px 0 4px}
+.wa-midia svg{width:15px;height:15px;flex:none;color:var(--tinta-3)}
+.wa-arq{font:500 12px/1.4 'JetBrains Mono',ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.wa-sis{align-self:center;display:flex;align-items:center;gap:5px;font-size:12px;color:var(--tinta-3);padding:1px 0}
+.wa-sis svg{width:12px;height:12px}
+.wa-queda{display:grid;grid-template-columns:18px minmax(0,1fr);gap:8px;background:var(--laranja-fundo);color:var(--laranja);border-radius:10px;padding:10px 12px;font-size:13.5px;line-height:1.45;margin-top:10px}
+.wa-queda svg{width:16px;height:16px;margin-top:2px}
+.wa-queda b{font-weight:600}
+.wa-mais{align-self:center;font-size:13px;color:var(--ouro);border-bottom:1px dotted var(--ouro);margin:6px 0}
+.wa-mais small{color:var(--tinta-3)}
+.chegou{animation:wa-chega .35s ease-out}
+@keyframes wa-chega{from{transform:translateY(6px);opacity:.3}to{transform:none;opacity:1}}
+@media(max-width:520px){.abas-cx .so-largo{display:none}.abas-cx{margin:-8px -20px 10px}.wa-balao{max-width:90%}}

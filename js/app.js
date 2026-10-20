@@ -53,6 +53,16 @@ const ICO = {
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg>',
   nota: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4h11l3 3v13H5z"/><path d="M8 12h8M8 16h5"/></svg>',
   copiar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/></svg>',
+  // conversa do WhatsApp 2460: etiquetas de mídia e avisos
+  foto: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 8"/></svg>',
+  video: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3"/></svg>',
+  audio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
+  doc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 13h6M9 17h4"/></svg>',
+  local: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/></svg>',
+  relogio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg>',
+  alerta: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l9.5 17h-19z"/><path d="M12 10v4M12 17.2v.1"/></svg>',
+  reacao: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/></svg>',
+  apagada: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M6 18L18 6"/></svg>',
 };
 const MOTOR_COR = { ChatGPT: 'var(--ouro)', Perplexity: 'var(--ouro-2)', Gemini: 'var(--laranja)', Claude: 'var(--ouro)', Copilot: 'var(--laranja)', Google: 'var(--verde)', Bing: 'var(--azul)', Instagram: 'var(--roxo)', Facebook: 'var(--roxo)', '(direto)': 'var(--tinta-3)' };
 const corMotor = (m, tipo) => MOTOR_COR[m] || (tipo === 'ia' ? 'var(--ouro)' : tipo === 'busca' ? 'var(--verde)' : tipo === 'social' ? 'var(--roxo)' : 'var(--tinta-3)');
@@ -361,11 +371,87 @@ async function telaPessoas(q = '') {
 /* ---------------------------------------------------------------- pessoa */
 const EV_HUMANO = { ligacao: 'Ligação', whatsapp: 'WhatsApp', visita: 'Visita', nota: 'Nota', repasse: 'Repasse', etapa: 'Etapa', tarefa: 'Tarefa', sistema: 'Sistema' };
 function nomeEvento(nome) { const r = estado.registro?.eventos?.[nome]; return r ? r.o_que : nome; }
+
+/* ------------------------------------------- conversa do WhatsApp 2460 */
+/* Versão B do protótipo, escolhida pelo dono em 19/10/2026: aba "Conversa"
+   ao lado da "Linha do tempo" na ficha. A linha do tempo tem uma atividade
+   por rodada de conversa (013, regra 5); aqui vem cada mensagem de
+   whatsapp_mensagens. Só leitura: o console nunca envia pelo 2460. Mídia não
+   é baixada (o id da Meta vale 30 dias): vira etiqueta com tipo e nome.
+   Reação, apagamento e aviso do sistema (conta = false) viram uma linha
+   pequena, sem o símbolo da reação (nunca emoji no console). */
+const WA_MIDIA = { image: ['foto', 'Foto'], video: ['video', 'Vídeo'], audio: ['audio', 'Áudio'], document: ['doc', 'Documento'], sticker: ['foto', 'Figurinha'], media_placeholder: ['foto', 'Mídia da conversa antiga'] };
+const WA_LOTE = 60;
+const diaDe = (d) => isoDia(new Date(d));
+const horaDe = (d) => new Date(d).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+function rotuloDiaWa(d) { const hoje = new Date(), ontem = new Date(); ontem.setDate(ontem.getDate() - 1); const k = diaDe(d); return k === isoDia(hoje) ? 'Hoje' : k === isoDia(ontem) ? 'Ontem' : fmtData(d, false); }
+const ordemWa = (a, b) => new Date(a.em) - new Date(b.em) || String(a.wamid).localeCompare(String(b.wamid));
+function balaoWa(m, novo) {
+  if (m.conta === false) {
+    const t = m.formato === 'reaction' ? (m.direcao === 'saida' ? 'O 2460 reagiu a uma mensagem' : 'O cliente reagiu a uma mensagem') : m.formato === 'revoke' ? 'Mensagem apagada' : m.formato === 'edit' ? 'Mensagem editada' : 'Aviso do WhatsApp';
+    return `<div class="wa-sis${novo ? ' chegou' : ''}">${m.formato === 'reaction' ? ICO.reacao : ICO.apagada}${h(t)} · ${horaDe(m.em)}</div>`;
+  }
+  const md = WA_MIDIA[m.formato], mi = m.midia || {};
+  const etiqueta = (ico, rot, arq) => `<span class="wa-midia">${ICO[ico]}<span>${h(rot)}</span>${arq ? `<span class="wa-arq">${h(arq)}</span>` : ''}</span>`;
+  let corpo;
+  if (md) corpo = etiqueta(md[0], m.formato === 'audio' && mi.voz ? 'Mensagem de voz' : md[1], mi.nome) + (m.texto ? `<span class="wa-txt">${h(m.texto)}</span>` : '');
+  else if (m.formato === 'location') corpo = etiqueta('local', m.texto || 'Localização');
+  else if (m.formato === 'contacts') corpo = etiqueta('pessoas', m.texto || 'Contato compartilhado');
+  else corpo = m.texto ? `<span class="wa-txt">${h(m.texto)}</span>` : `<span class="wa-txt wa-sem">Mensagem sem texto (${h(m.formato)})</span>`;
+  return `<div class="wa-balao ${m.direcao === 'saida' ? 'sai' : 'ent'}${m.canal === 'historico' ? ' antiga' : ''}${novo ? ' chegou' : ''}">${m.direcao === 'saida' ? '<span class="wa-quem">2460</span>' : ''}${corpo}<span class="wa-hora">${horaDe(m.em)}</span></div>`;
+}
+function conversaWa(msgs, mostrar, novo) {
+  const ini = Math.max(0, msgs.length - mostrar);
+  let out = ini ? `<button class="wa-mais" type="button" data-wa-mais>Mostrar ${Math.min(WA_LOTE, ini)} mensagens anteriores <small>(${ini} antes destas)</small></button>` : '';
+  let dia = '', antiga = false;
+  msgs.slice(ini).forEach(m => {
+    if (m.canal === 'historico' && !antiga) { antiga = true; dia = ''; out += `<div class="wa-faixa">${ICO.relogio}<span>Conversa antiga: veio do celular quando o 2460 foi ligado ao painel. Pode faltar alguma mensagem.</span></div>`; }
+    if (m.canal !== 'historico' && antiga) { antiga = false; dia = ''; out += '<div class="wa-dia"><span>Daqui em diante, ao vivo</span></div>'; }
+    const k = diaDe(m.em); if (k !== dia) { dia = k; out += `<div class="wa-dia"><span>${rotuloDiaWa(m.em)}</span>${m.canal === 'historico' ? '<span class="chip c-neutro">conversa antiga</span>' : ''}</div>`; }
+    out += balaoWa(m, m.wamid === novo);
+  });
+  return out;
+}
+function resumoWa(wa) {
+  const msgs = wa.mensagens || [], conta = msgs.filter(m => m.conta !== false);
+  if (!conta.length) return 'Nenhuma mensagem com o 2460 ainda. Quando a pessoa escrever, a conversa aparece aqui sozinha.';
+  const ult = conta[conta.length - 1], antigas = conta.filter(m => m.canal === 'historico').length;
+  return `${conta.length} mensage${conta.length === 1 ? 'm' : 'ns'}${antigas ? ` · ${antigas} da conversa antiga` : ''} · última ${rotuloDiaWa(ult.em).toLowerCase()} às ${horaDe(ult.em)}${wa.mais ? ` · mostrando as ${msgs.length} mais recentes` : ''}`;
+}
+const quedaWa = (q) => q ? `<div class="wa-queda">${ICO.alerta}<span><b>A conexão do 2460 com o painel caiu em ${fmtData(q.em)}.</b> O celular continua funcionando, mas o que chegou depois disso não está aqui até reconectar.</span></div>` : '';
+function ligarConversaWa(pessoaId, wa) {
+  const el = document.getElementById('wa-conv'); if (!el) return;
+  estado.waMostrar = estado.waMostrar || {};
+  const desenhar = (novo) => {
+    const msgs = wa.mensagens;
+    el.innerHTML = conversaWa(msgs, estado.waMostrar[pessoaId] || WA_LOTE, novo);
+    document.getElementById('wa-sub').textContent = resumoWa(wa);
+    document.getElementById('wa-conta').textContent = msgs.filter(m => m.conta !== false).length;
+  };
+  el.addEventListener('click', (e) => { if (!e.target.closest('[data-wa-mais]')) return; estado.waMostrar[pessoaId] = (estado.waMostrar[pessoaId] || WA_LOTE) + WA_LOTE; desenhar(); });
+  desenhar();
+  // mensagem nova (ou mídia antiga que chegou depois) entra sem recarregar a ficha
+  pararConversaWa();
+  estado.waParar = dados.aoVivoWhatsapp(pessoaId, (m) => {
+    if (!document.body.contains(el) || m.pessoa_id !== pessoaId) return;
+    const i = wa.mensagens.findIndex(x => x.wamid === m.wamid);
+    if (i >= 0) wa.mensagens[i] = { ...wa.mensagens[i], ...m }; else { wa.mensagens.push(m); wa.mensagens.sort(ordemWa); estado.waMostrar[pessoaId] = (estado.waMostrar[pessoaId] || WA_LOTE) + 1; }
+    desenhar(i >= 0 ? null : m.wamid);
+    const nova = document.getElementById('wa-nova'); if (nova && i < 0 && document.querySelector('[data-painel-p="conversa"]')?.hidden) nova.hidden = false;
+  });
+}
+function pararConversaWa() { if (estado.waParar) { estado.waParar(); estado.waParar = null; } }
+
 async function telaPessoa(id) {
-  const d = await dados.pessoa(id); const p = d.pessoa; if (!p) { moldura('pessoas', '<div class="cx vazio">Pessoa não encontrada.</div>'); return; }
+  pararConversaWa();
+  const [d, conv] = await Promise.all([dados.pessoa(id), dados.whatsapp(id).catch(e => ({ faltaSql: true, erro: e.message, mensagens: [] }))]);
+  const p = d.pessoa; if (!p) { moldura('pessoas', '<div class="cx vazio">Pessoa não encontrada.</div>'); return; }
   const n0 = d.negocios[0];
   const itens = [...d.atividades.map(a => ({ em: a.em, tipo: 'humano', a })), ...d.eventos.map(e => ({ em: e.ts, tipo: 'site', e }))].sort((a, b) => new Date(b.em) - new Date(a.em));
   const antes = d.eventos.filter(e => n0 && new Date(e.ts) < new Date(n0.criado_em)).length;
+  const temWa = !conv.faltaSql, nWa = (conv.mensagens || []).filter(m => m.conta !== false).length;
+  estado.abaPessoa = estado.abaPessoa || {};
+  const aba = temWa ? (estado.abaPessoa[id] || (nWa ? 'conversa' : 'tempo')) : 'tempo';
   moldura('pessoas', `${topo(nomeOk(p.nome), `${p.codigo || ''}${p.interna ? ' · PESSOA INTERNA (sem cartões, fora da fila e dos números)' : ''} · entrou ${fmtData(p.criado_em)}${p.esteve_no_site ? ' · esteve no site antes de se identificar' : ''}`, `<button class="btn" id="interna" title="${p.interna ? 'Volta a gerar cartões' : 'Sócio, corretor ou dono: sem cartões, fora da fila e dos números'}">${p.interna ? 'Deixar de ser interno' : 'Marcar como interno'}</button><a class="btn" href="#/pessoas">← Pessoas</a>`)}
     <div class="pessoa-grade">
       <div>
@@ -378,9 +464,13 @@ async function telaPessoa(id) {
             ${n.descricao ? `<p style="width:100%;margin:6px 0 0;font-size:14px;color:var(--tinta-2)">${h(n.descricao)}</p>` : ''}</div>`).join('') || '<p class="vazio">Sem negócio.</p>'}
           <div class="acao-rapida">${p.telefone ? `<a class="btn btn-verde" target="_blank" rel="noopener" href="${waLink(p.telefone, p.nome)}" id="wa">${ICO.wa} WhatsApp</a><a class="btn" href="tel:+${tel(p.telefone)}" id="ligar">${ICO.tel} Ligar</a>` : '<span class="chip c-neutro">sem telefone</span><span></span>'}
             <button class="btn" id="falei">${ICO.nota} Registrar contato</button><button class="btn" id="briefing">${ICO.copiar} Copiar briefing</button></div></div>
-        <div class="cx"><h2>Linha do tempo</h2><div class="sub">${d.eventos.length} eventos no site (${antes} antes de se identificar) · ${d.atividades.length} atividades</div>
+        <div class="cx">${temWa ? `<div class="abas-cx" role="tablist">
+            <button type="button" role="tab" data-aba-p="conversa" aria-selected="${aba === 'conversa'}">${ICO.wa}<span>Conversa<span class="so-largo"> no WhatsApp</span> 2460</span><small id="wa-conta">${nWa}</small><span class="chip c-verde" id="wa-nova" hidden>nova</span></button>
+            <button type="button" role="tab" data-aba-p="tempo" aria-selected="${aba === 'tempo'}"><span>Linha do tempo</span><small>${itens.length}</small></button></div>
+          <div data-painel-p="conversa" role="tabpanel"${aba === 'conversa' ? '' : ' hidden'}><div class="sub" id="wa-sub"></div>${quedaWa(conv.queda)}<div class="wa-conv" id="wa-conv"></div></div>` : '<h2>Linha do tempo</h2>'}
+          <div data-painel-p="tempo" role="tabpanel"${aba === 'tempo' ? '' : ' hidden'}><div class="sub">${d.eventos.length} eventos no site (${antes} antes de se identificar) · ${d.atividades.length} atividades</div>
           <ul class="linha-tempo" style="margin-top:10px">${itens.slice(0, 120).map(it => it.tipo === 'humano' ? `<li><div class="ponto ${it.a.tipo === 'etapa' ? 'etapa' : it.a.tipo === 'sistema' ? '' : 'humano'}">${it.a.tipo === 'etapa' ? ICO.seta : it.a.tipo === 'sistema' ? ICO.site : ICO.check}</div><div><b>${h(EV_HUMANO[it.a.tipo] || it.a.tipo)}${it.a.perfis?.nome ? ' · ' + h(it.a.perfis.nome) : ''}${it.a.resultado ? ' · ' + h(it.a.resultado) : ''}</b><small>${h(it.a.texto || '')}${it.a.meta?.rotulo ? ' — ' + h(it.a.meta.rotulo) + ' em ' + linkPag(it.a.meta.pagina) : ''}</small><small class="quando">${fmtData(it.em)}</small></div></li>`
-            : `<li><div class="ponto site">${it.e.nome.includes('whatsapp') || it.e.nome.includes('submit') ? ICO.wa : ICO.site}</div><div><b>${h(nomeEvento(it.e.nome))}</b><small>${linkPag(it.e.pagina)}${it.e.rotulo ? ' · ' + h(it.e.rotulo) : ''}${it.e.props?.pergunta ? ' · “' + h(it.e.props.pergunta) + '”' : ''}${it.e.props?.termo ? ' · buscou “' + h(it.e.props.termo) + '”' : ''}${it.e.origem_motor ? ' · ' + h(it.e.origem_motor) : ''}${it.e.dispositivo ? ' · ' + h(it.e.dispositivo) : ''}</small><small class="quando">${fmtData(it.em)}</small></div></li>`).join('') || '<li class="vazio">Sem eventos.</li>'}</ul></div>
+            : `<li><div class="ponto site">${it.e.nome.includes('whatsapp') || it.e.nome.includes('submit') ? ICO.wa : ICO.site}</div><div><b>${h(nomeEvento(it.e.nome))}</b><small>${linkPag(it.e.pagina)}${it.e.rotulo ? ' · ' + h(it.e.rotulo) : ''}${it.e.props?.pergunta ? ' · “' + h(it.e.props.pergunta) + '”' : ''}${it.e.props?.termo ? ' · buscou “' + h(it.e.props.termo) + '”' : ''}${it.e.origem_motor ? ' · ' + h(it.e.origem_motor) : ''}${it.e.dispositivo ? ' · ' + h(it.e.dispositivo) : ''}</small><small class="quando">${fmtData(it.em)}</small></div></li>`).join('') || '<li class="vazio">Sem eventos.</li>'}</ul></div></div>
       </div>
       <div class="cx"><h2>Dados</h2><dl class="dados">
         <dt>Telefone</dt><dd>${h(p.telefone_fmt || p.telefone || '—')} ${chipConferir(p)}${p.telefone_conferir && p.telefone_motivo ? `<small style="display:block;color:var(--tinta-3)">${h(p.telefone_motivo)} — confirmar com a pessoa na conversa</small>` : ''}</dd>
@@ -397,6 +487,15 @@ async function telaPessoa(id) {
       </dl></div>
     </div>`);
   ligarTopo();
+  if (temWa) {
+    ligarConversaWa(id, conv);
+    document.querySelectorAll('[data-aba-p]').forEach(b => b.onclick = () => {
+      estado.abaPessoa[id] = b.dataset.abaP;
+      document.querySelectorAll('[data-aba-p]').forEach(x => x.setAttribute('aria-selected', String(x === b)));
+      document.querySelectorAll('[data-painel-p]').forEach(x => { x.hidden = x.dataset.painelP !== b.dataset.abaP; });
+      if (b.dataset.abaP === 'conversa') document.getElementById('wa-nova').hidden = true;
+    });
+  }
   const neg = () => n0?.id;
   document.getElementById('falei').onclick = () => neg() ? modalFalei(neg(), p.id) : toast('Crie um negócio primeiro');
   document.getElementById('briefing').onclick = async () => { copiar(briefing(p, n0, d.eventos)); if (neg()) await dados.atividade({ negocio_id: neg(), pessoa_id: p.id, tipo: 'repasse', texto: 'Copiou o briefing' }); };
@@ -752,6 +851,7 @@ async function render() {
   if (!estado.perfisLista) estado.perfisLista = await dados.perfis();
   if (!estado.registro) { try { estado.registro = await (await fetch(C.registroEventos || '/eventos.json')).json(); } catch { estado.registro = { eventos: {} }; } }
   if (renderizando) return; renderizando = true;
+  pararConversaWa();
   try {
     switch (rota) {
       case 'fila': await telaFila(); break;

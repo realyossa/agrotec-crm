@@ -25,6 +25,10 @@ console (este repositório)  →  Supabase (Auth + RLS + Realtime)
   `whatsapp_mensagens`, a agenda do celular em `whatsapp_contatos` e as quedas de
   conexão em `whatsapp_conexao`; contato novo ganha cartão em "Em análise" com o Jonas
   de responsável. Só captura, nunca envia. As regras estão no cabeçalho do arquivo.
+  Na ficha da pessoa, a aba "Conversa no WhatsApp 2460" mostra cada mensagem (a linha
+  do tempo tem só uma atividade por rodada) e recebe as novas pelo Realtime, sem
+  recarregar. Para ver com dados de exemplo: `?demo=1#/pessoa/p0` (`&queda=1` mostra
+  o aviso de conexão caída).
 - `logos/` — logos oficiais das empresas que leem o site (fonte de cada arquivo em
   `logos/FONTES.md`). Empresa sem arquivo oficial aparece como monograma.
 - `config.js` — URL, chave **publishable** (pública por desenho), e-mail fixo do login e tema padrão.
