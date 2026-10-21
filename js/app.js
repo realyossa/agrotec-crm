@@ -14,7 +14,9 @@ document.documentElement.setAttribute('data-tema', estado.tema);
 /* ------------------------------------------------------------ utilidades */
 const h = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 // pagina do site como LINK: o time clica e cai na pagina que trouxe o cliente (pedido do Yossa, 03/09)
-const linkPag = (pg) => pg ? `<a class="lk-pag" href="https://agrotecimobiliarianoagro.com.br${h(pg)}" target="_blank" rel="noopener" title="Abrir a página do site">${h(pg)}</a>` : '';
+/* só caminho do próprio site vira link: página vem de evento público e
+   "@outro.com" ou "//outro.com" levariam para fora */
+const linkPag = (pg) => pg && !/^\/(?![/\\])/.test(pg) ? h(pg) : pg ? `<a class="lk-pag" href="https://agrotecimobiliarianoagro.com.br${h(pg)}" target="_blank" rel="noopener" title="Abrir a página do site">${h(pg)}</a>` : '';
 const fmtData = (d, comHora = true) => { if (!d) return ''; const x = new Date(d); const dd = x.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }); return comHora ? dd + ' ' + x.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : dd; };
 const fmtDia = (d) => { const x = new Date(d + (d.length === 10 ? 'T12:00:00' : '')); return x.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }); };
 const relativo = (d) => { if (!d) return ''; const m = (Date.now() - new Date(d)) / 60000; if (m < 1) return 'agora'; if (m < 60) return Math.round(m) + ' min'; if (m < 48 * 60) return Math.round(m / 60) + ' h'; return Math.round(m / 1440) + ' d'; };
@@ -66,6 +68,16 @@ const ICO = {
 };
 const MOTOR_COR = { ChatGPT: 'var(--ouro)', Perplexity: 'var(--ouro-2)', Gemini: 'var(--laranja)', Claude: 'var(--ouro)', Copilot: 'var(--laranja)', Google: 'var(--verde)', Bing: 'var(--azul)', Instagram: 'var(--roxo)', Facebook: 'var(--roxo)', '(direto)': 'var(--tinta-3)' };
 const corMotor = (m, tipo) => MOTOR_COR[m] || (tipo === 'ia' ? 'var(--ouro)' : tipo === 'busca' ? 'var(--verde)' : tipo === 'social' ? 'var(--roxo)' : 'var(--tinta-3)');
+/* Conversa do WhatsApp 2460 ligada ao clique no site (supabase/014): com
+   certeza (o texto bate), provável (só o horário bate — o corretor confirma
+   com a pessoa) ou confirmado por ele. */
+function vinculoSite(p) {
+  const v = p.vinculo_site; if (!v || v.certeza === 'descartado') return '';
+  const prov = v.certeza === 'provavel';
+  const chip = prov ? '<span class="chip c-laranja">provável — confirmar com a pessoa</span>'
+    : `<span class="chip c-verde">${v.certeza === 'confirmado' ? 'confirmado' : 'certeza'}</span>`;
+  return `<dt>Veio do site</dt><dd class="chips">${chip}<span>clicou em “${h(v.botao || 'WhatsApp')}” em ${linkPag(v.pagina)}${v.origem ? ' · origem ' + h(v.origem) : ''} · ${fmtData(v.clique_em)}</span>${prov ? '<button class="btn btn-p" data-vinculo="confirmar" title="A pessoa confirmou que veio do site: liga o histórico de navegação a esta ficha">confirmar</button><button class="btn btn-p" data-vinculo="descartar" title="Não foi este clique: descarta a sugestão">não é</button>' : ''}</dd>`;
+}
 function chipOrigem(o) {
   if (!o) return '<span class="chip c-neutro">(sem origem)</span>';
   const tipo = o.tipo || ''; const motor = o.motor || (tipo === 'interno' ? '(interno)' : '(direto)');
@@ -478,6 +490,8 @@ async function telaPessoa(id) {
         <dt>E-mail</dt><dd>${h(p.email || '—')}</dd>
         <dt>Cidade</dt><dd>${h(p.cidade || '—')}${p.cidade_ip ? ` <small style="color:var(--tinta-3)">· pelo IP: ${h(p.cidade_ip)}${p.uf_ip ? '/' + h(p.uf_ip) : ''}</small>` : ''}</dd>
         <dt>Origem da conversão</dt><dd class="chips">${chipOrigem(p.origem_conversao)}${p.origem_conversao?.referrer_host ? `<span class="chip c-borda">${h(p.origem_conversao.referrer_host)}</span>` : ''}${p.origem_conversao?.utm_campaign ? `<span class="chip c-borda">${h(p.origem_conversao.utm_campaign)}</span>` : ''}</dd>
+        ${vinculoSite(p)}
+        ${p.etiquetas?.length ? `<dt>Etiquetas</dt><dd class="chips">${p.etiquetas.map(t => `<span class="chip c-borda">${h(t)}</span>`).join('')}</dd>` : ''}
         <dt>Primeira visita</dt><dd class="chips">${chipOrigem(p.origem_primeira)}${p.origem_primeira?.landing ? `<a class="chip c-borda lk-pag" href="https://agrotecimobiliarianoagro.com.br${h(p.origem_primeira.landing)}" target="_blank" rel="noopener">${h(p.origem_primeira.landing)}</a>` : ''}</dd>
         <dt>Comportamento</dt><dd>${p.visitas || 1} visita(s)${p.leitura != null ? ' · leu ' + p.leitura + '%' : ''}${p.tempo_site ? ' · ' + h(p.tempo_site) + ' no site' : ''}</dd>
         ${p.trajeto?.length ? `<dt>Trajeto</dt><dd style="font-size:13px">${p.trajeto.map(h).join(' › ')}</dd>` : ''}
@@ -501,6 +515,15 @@ async function telaPessoa(id) {
   document.getElementById('briefing').onclick = async () => { copiar(briefing(p, n0, d.eventos)); if (neg()) await dados.atividade({ negocio_id: neg(), pessoa_id: p.id, tipo: 'repasse', texto: 'Copiou o briefing' }); };
   const wa = document.getElementById('wa'); if (wa) wa.onclick = () => neg() && dados.atividade({ negocio_id: neg(), pessoa_id: p.id, tipo: 'whatsapp', texto: 'Abriu o WhatsApp pelo console', resultado: 'tentativa' });
   const lg = document.getElementById('ligar'); if (lg) lg.onclick = () => neg() && dados.atividade({ negocio_id: neg(), pessoa_id: p.id, tipo: 'ligacao', texto: 'Ligou pelo console', resultado: 'tentativa' });
+  document.querySelectorAll('[data-vinculo]').forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try {
+      const r = await dados.vinculoSite(p.id, b.dataset.vinculo);
+      if (r && r.ok === false) { toast(r.erro || 'Não deu'); b.disabled = false; return; }
+      toast(b.dataset.vinculo === 'confirmar' ? 'Confirmado: o histórico do site entrou na ficha' : 'Sugestão descartada');
+      telaPessoa(p.id);
+    } catch (e) { toast('Não deu agora'); b.disabled = false; }
+  });
   document.getElementById('salvar-obs').onclick = async () => { await dados.editarPessoa(p.id, { observacoes: document.getElementById('obs').value }); toast('Salvo'); };
   /* Gente da casa (31/08/2026): sócio/corretor/dono que testa o site virava
      lead e poluía fila e números. Marcar como interno apaga os cartões da

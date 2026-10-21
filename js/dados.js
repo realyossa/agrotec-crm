@@ -69,6 +69,7 @@ const provSupabase = {
   // "era este": promove uma variação a número principal. A regra mora no
   // banco (telefone_confirmado): só número que já está na ficha, e nunca um
   // que outra pessoa já tenha.
+  async vinculoSite(pessoaId, acao) { const s = await cliente(); const { data, error } = await s.rpc(acao === 'confirmar' ? 'whatsapp_clique_confirmar' : 'whatsapp_clique_descartar', { p_pessoa: pessoaId }); if (error) throw error; return data; },
   async telefoneConfirmado(pessoaId, numero) { const s = await cliente(); const { data, error } = await s.rpc('telefone_confirmado', { p_pessoa: pessoaId, p_numero: numero }); if (error) throw error; return data; },
   // gente da casa: a regra (apagar cartoes, impedir novos) mora no banco (marcar_interna)
   async marcarInterna(pessoaId, valor) { const s = await cliente(); const { data, error } = await s.rpc('marcar_interna', { p_pessoa: pessoaId, p_valor: !!valor }); if (error) throw error; return data; },
@@ -155,6 +156,11 @@ function demoDados() {
     { id: 'par1', nome: 'João Merkel', tipo: 'corretor', uf: 'SC', cidade: 'Chapecó', telefone: '5549988112233', email: '', observacao: 'Forte no oeste, fazendas de grão', ativo: true, criado_em: iso(dia(20)) },
     { id: 'par2', nome: 'AeroCampo Drones', tipo: 'drone', uf: 'SC', cidade: 'Xanxerê', telefone: '5549977665544', email: 'contato@aerocampo.com.br', observacao: 'Voo em até 48 h na região', ativo: true, criado_em: iso(dia(12)) },
     { id: 'par3', nome: 'Imobiliária Terra Boa', tipo: 'imobiliaria', uf: 'PR', cidade: 'Pato Branco', telefone: '5546991234567', email: '', observacao: '', ativo: true, criado_em: iso(dia(5)) }];
+  // clique no site ligado à conversa (014): p1 com certeza, p2 provável (botões confirmar / não é)
+  Object.assign(pessoas[1], { origem_conversao: { tipo: 'busca', motor: 'Google', via: 'referrer', canal: 'whatsapp' }, etiquetas: ['veio do site', 'origem: Google', 'funil: compra', 'cidade: chapeco'],
+    vinculo_site: { certeza: 'certeza', pagina: '/sitios-chapeco', botao: 'Falar no WhatsApp', origem: 'Google', clique_em: pessoas[1].criado_em } });
+  Object.assign(pessoas[2], { etiquetas: [],
+    vinculo_site: { certeza: 'provavel', pagina: '/fazendas', botao: 'WhatsApp', origem: 'IA (ChatGPT)', clique_em: pessoas[2].criado_em } });
   // WhatsApp 2460 (013): conversas inventadas para p0, p1 e p2; o telefone é
   // fictício (5549000000…) e não aparece na tela. p0 tem conversa antiga,
   // mídia, reação e mensagem apagada; p1 veio pelo site; p2 só tem histórico.
@@ -232,6 +238,7 @@ const provDemo = {
   async editarNegocio(id, c) { Object.assign(D.negocios.find(x => x.id === id), c); },
   async criarNegocio(c) { D.negocios.unshift({ id: 'n' + Math.random(), criado_em: new Date().toISOString(), pontuacao: 0, ...c }); },
   async editarPessoa(id, c) { Object.assign(D.pessoas.find(x => x.id === id), c); },
+  async vinculoSite(id, acao) { const p = D.pessoas.find(x => x.id === id); if (p?.vinculo_site) p.vinculo_site = { ...p.vinculo_site, certeza: acao === 'confirmar' ? 'confirmado' : 'descartado' }; return { ok: true }; },
   async telefoneConfirmado(id, numero) { const p = D.pessoas.find(x => x.id === id); if (p) { p.telefone = numero; p.telefone_conferir = false; p.telefone_motivo = null; p.telefone_alternativas = []; } return { ok: true }; },
   async marcarInterna(id, valor) { const p = D.pessoas.find(x => x.id === id); if (p) { p.interna = !!valor; if (valor) D.negocios = D.negocios.filter(n => n.pessoa_id !== id); } return { ok: true }; },
   async parceiros() { return espera(D.parceiros); },
