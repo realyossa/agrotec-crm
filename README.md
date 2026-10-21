@@ -29,6 +29,12 @@ console (este repositório)  →  Supabase (Auth + RLS + Realtime)
   do tempo tem só uma atividade por rodada) e recebe as novas pelo Realtime, sem
   recarregar. Para ver com dados de exemplo: `?demo=1#/pessoa/p0` (`&queda=1` mostra
   o aviso de conexão caída).
+- `supabase/014_whatsapp_clique.sql` (21/10/2026) — quem clica no WhatsApp do site sem
+  deixar telefone e escreve para o 2460 tem a conversa ligada ao clique: pelo começo
+  do texto que o site deixa escrito (certeza, liga na hora) ou só pelo horário
+  (provável: fica como sugestão na ficha, com "confirmar" e "não é"). Mais de um
+  visitante possível não liga ninguém. Na ficha: página, botão, origem, trajeto e
+  etiquetas. Exige o 013; regras no cabeçalho; teste em `agrotec/ferramentas/testar_whatsapp.mjs`.
 - `logos/` — logos oficiais das empresas que leem o site (fonte de cada arquivo em
   `logos/FONTES.md`). Empresa sem arquivo oficial aparece como monograma.
 - `config.js` — URL, chave **publishable** (pública por desenho), e-mail fixo do login e tema padrão.
